@@ -38,6 +38,7 @@
 #include <QMetaType>
 #include <QObject>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPen>
 #include <QStatusBar>
 #include <QString>
@@ -47,6 +48,8 @@
 #if HAVE_QTWEBKIT
 #include <QWebView>
 #endif
+
+class QPainterPath;
 
 Q_DECLARE_METATYPE(QGradient)
 Q_DECLARE_METATYPE(QPainterPath)
@@ -76,7 +79,7 @@ static QMetaEnum
 f_enumerator(const char *s)
 {
   struct QFakeObject : public QObject {
-    static const QMetaObject* qt() { return &staticQtMetaObject; } };
+    static const QMetaObject* qt() { return &QObject::staticMetaObject; } };
   return f_enumerator(s, QFakeObject::qt());
 }
 #endif
@@ -155,10 +158,10 @@ static void
 f_checkvar(lua_State *L, int index, const char *name, int tid)
 { 
   if (index)
-    lua_getfield(L,index,name); 
+    lua_getfield(L,index,name);
   QVariant v = luaQ_toqvariant(L, -1, tid);
   if (v.userType() != tid)
-    luaL_error(L, "qt.%s expected in field '%s'", QMetaType::typeName(tid));
+    luaL_error(L, "qt.%s expected in field '%s'", QMetaType(tid).name());
 }
 
 static bool
@@ -475,7 +478,7 @@ qbrush_totable(lua_State *L)
     case Qt::LinearGradientPattern:
     case Qt::ConicalGradientPattern:
     case Qt::RadialGradientPattern:
-      v = qVariantFromValue<QGradient>(*s.gradient());
+      v = QVariant::fromValue<QGradient>(*s.gradient());
       luaQ_pushqt(L, v);
       lua_setfield(L, -2, "gradient");
       break;
@@ -483,7 +486,7 @@ qbrush_totable(lua_State *L)
       v = QVariant(s.textureImage());
       luaQ_pushqt(L, v);
       lua_setfield(L, -2, "texture");
-      if (qVariantValue<QImage>(v).depth() > 1) 
+      if (v.value<QImage>().depth() > 1)
         break;
     default:
       v = QVariant(s.color());
@@ -523,9 +526,8 @@ qbrush_fromtable(lua_State *L)
       const int t_color = QMetaType::QColor;
       const int t_transform = QMetaType::QTransform;
       if (f_optvar(L, 1, "gradient", t_gradient))
-        s = QBrush(qVariantValue<QGradient>
-                   (luaQ_toqvariant(L, -1, t_gradient)));
-      lua_pop(L, 1);
+        s = QBrush(luaQ_toqvariant(L, -1, t_gradient).value<QGradient>());
+        lua_pop(L, 1);
       if (f_optvar(L, 1, "texture", t_image))
         {
           // qt4.4 barks when creating an image texture 
@@ -535,7 +537,7 @@ qbrush_fromtable(lua_State *L)
           lua_insert(L, -2);
           luaQ_call(L, 1, 1, 0);
           const int t_brush = QMetaType::QBrush;
-          s = qVariantValue<QBrush>(luaQ_toqvariant(L, -1, t_brush));
+          s = luaQ_toqvariant(L, -1, t_brush).value<QBrush>();
         }
       lua_pop(L, 1);
       if (f_optflag(L, 1, "style", m_style))
@@ -544,12 +546,11 @@ qbrush_fromtable(lua_State *L)
       if (f_optvar(L, 1, "color", t_color)) {
         if (s.style() == Qt::NoBrush) 
           s.setStyle(Qt::SolidPattern);
-        s.setColor(qVariantValue<QColor>(luaQ_toqvariant(L, -1, t_color)));
+        s.setColor(luaQ_toqvariant(L, -1, t_color).value<QColor>());
       }
       lua_pop(L, 1);
       if (f_optvar(L, 1, "transform", t_transform))
-        s.setTransform(qVariantValue<QTransform>
-                       (luaQ_toqvariant(L, -1, t_transform)));
+        s.setTransform(luaQ_toqvariant(L, -1, t_transform).value<QTransform>());
     lua_pop(L, 1);
     }
   luaQ_pushqt(L, QVariant(s));
@@ -582,7 +583,7 @@ qcolor_fromtable(lua_State *L)
     c.setRgbF(luaL_checknumber(L, 1),luaL_checknumber(L, 2),
               luaL_checknumber(L, 3),luaL_optnumber(L, 4, 1.0));
   } else if (lua_isstring(L,1)) {
-    c.setNamedColor(lua_tostring(L,1));
+    c.fromString(lua_tostring(L,1));
   } else {
     qreal s[4] = {0,0,0,1};
     do_qcolor(fromtable_)
@@ -639,9 +640,9 @@ lua_checkpixmap(lua_State *L, int index)
 {
   QVariant v = luaQ_toqvariant(L, index);
   if (v.userType() == qMetaTypeId<QImage>())
-    return QPixmap::fromImage(qVariantValue<QImage>(v));
+    return QPixmap::fromImage(v.value<QImage>());
   if (v.userType() == qMetaTypeId<QPixmap>())
-    return qVariantValue<QPixmap>(v);
+    return v.value<QPixmap>();
   luaL_error(L, "illegal argument");
   return QPixmap();
 }
@@ -670,9 +671,19 @@ qcursor_new(lua_State *L)
       int hy = luaL_optinteger(L, i++, -1);
       if (i <= 4)
         luaQ_pushqt(L, QCursor(pm , hx, hy));
-      else if (pm.depth() == 1 && mask.depth() == 1)
-        luaQ_pushqt(L, QCursor(QBitmap(pm), QBitmap(mask), hx, hy));
-      else
+      else if (pm.depth() == 1 && mask.depth() == 1) {
+        QBitmap pmBitmap(pm.size());
+        QBitmap maskBitmap(mask.size());
+        pmBitmap.fill(Qt::color0);
+        maskBitmap.fill(Qt::color0);
+        QPainter pmPainter(&pmBitmap);
+        QPainter maskPainter(&maskBitmap);
+        pmPainter.drawPixmap(0, 0, pm);
+        maskPainter.drawPixmap(0, 0, mask);
+        pmPainter.end();
+        maskPainter.end();
+        luaQ_pushqt(L, QCursor(pmBitmap, maskBitmap, hx, hy));
+      } else
         luaL_error(L, "expecting bitmap and mask of depth 1");
       return 1;
     }
@@ -947,7 +958,7 @@ qfiledialog_getopenfilename(lua_State *L)
   QString d = luaQ_optqvariant<QString>(L, 3);
   QString f = luaQ_optqvariant<QString>(L, 4);
   QString s = luaQ_optqvariant<QString>(L, 5);
-  QFDOptions o = f_optfiledialogoptions(L, 6, 0);
+  QFDOptions o = f_optfiledialogoptions(L, 6, QFileDialog::Options());
   o |= QFileDialog::DontUseNativeDialog;
   luaQ_pushqt(L, QFileDialog::getOpenFileName(p,c,d,f,&s,o));
   luaQ_pushqt(L, s);
@@ -962,7 +973,7 @@ qfiledialog_getopenfilenames(lua_State *L)
   QString d = luaQ_optqvariant<QString>(L, 3);
   QString f = luaQ_optqvariant<QString>(L, 4);
   QString s = luaQ_optqvariant<QString>(L, 5);
-  QFDOptions o = f_optfiledialogoptions(L, 6, 0);
+  QFDOptions o = f_optfiledialogoptions(L, 6, QFileDialog::Options());
   o |= QFileDialog::DontUseNativeDialog;
   luaQ_pushqt(L, QFileDialog::getOpenFileNames(p,c,d,f,&s,o));
   luaQ_pushqt(L, s);
@@ -977,7 +988,8 @@ qfiledialog_getsavefilename(lua_State *L)
   QString d = luaQ_optqvariant<QString>(L, 3);
   QString f = luaQ_optqvariant<QString>(L, 4);
   QString s = luaQ_optqvariant<QString>(L, 5);
-  QFDOptions o = f_optfiledialogoptions(L, 6, 0);
+  QFDOptions o = f_optfiledialogoptions(L, 6, QFileDialog::Options());
+  o |= QFileDialog::DontUseNativeDialog;
   luaQ_pushqt(L, QFileDialog::getSaveFileName(p,c,d,f,&s,o));
   luaQ_pushqt(L, s);
   return 2;
@@ -1024,8 +1036,7 @@ do_qhook(qfiledialog)
   do ## optbool("overline",x=s.overline(), s.setOverline(x)) \
   do ## optbool("strikeOut",x=s.strikeOut(),s.setStrikeOut(x)) \
   do ## optbool("fixedPitch",x=s.fixedPitch(),s.setFixedPitch(x)) \
-  do ## optbool("rawMode",x=s.rawMode(),s.setRawMode(x)) \
-  do ## optint("weight",x=s.weight(),s.setWeight(x)) \
+  do ## optint("weight",x=s.weight(),s.setWeight(static_cast<QFont::Weight>(x))) \
   do ## optint("stretch",x=s.stretch(),s.setStretch(x)) \
   do ## optbool("typewriter",x=(s.styleHint()==QFont::TypeWriter),\
                 if (x) s.setStyleHint(QFont::TypeWriter,QFont::PreferMatch)) \
@@ -1071,7 +1082,6 @@ qfont_info(lua_State *L)
   totable_flt("pointSize", x=s.pointSizeF(),);
   totable_int("pixelSize", x=s.pixelSize(),);
   totable_int("size", x=s.pixelSize(),);
-  totable_bool("rawMode", x=s.rawMode(),);
   totable_int("weight", x=s.weight(),);
   totable_bool("typewriter", x=(s.styleHint()==QFont::TypeWriter),);
   totable_bool("serif", x=(s.styleHint()==QFont::Serif),);
@@ -1146,9 +1156,9 @@ qicon_new(lua_State *L)
   QVariant v = luaQ_toqvariant(L, 1);
   QVariant s = luaQ_toqvariant(L, 1, QMetaType::QString);
   if (v.userType() == QMetaType::QPixmap)
-    icon = QIcon(qVariantValue<QPixmap>(v));
+    icon = QIcon(v.value<QPixmap>());
   else if (v.userType() == QMetaType::QImage)
-    icon = QIcon(QPixmap::fromImage(qVariantValue<QImage>(v)));
+    icon = QIcon(QPixmap::fromImage(v.value<QImage>()));
   else if (s.userType() == QMetaType::QString)
     icon = QIcon(s.toString());
   else if (! lua_isnoneornil(L, 1))
@@ -1744,9 +1754,9 @@ qpen_fromtable(lua_State *L)
         s.setJoinStyle(Qt::PenJoinStyle(lua_tointeger(L, -1)));
       lua_pop(L, 1);
       if (f_optvar(L, 1, "color", t_color))
-        s.setColor(qVariantValue<QColor>(luaQ_toqvariant(L, -1, t_color)));
+        s.setColor(luaQ_toqvariant(L, -1, t_color).value<QColor>());
       if (f_optvar(L, 1, "brush", t_brush))
-        s.setBrush(qVariantValue<QBrush>(luaQ_toqvariant(L, -1, t_brush)));
+        s.setBrush(luaQ_toqvariant(L, -1, t_brush).value<QBrush>());
       if (f_opttype(L, 1, "width", LUA_TNUMBER))
         s.setWidthF(lua_tonumber(L, -1));
       lua_pop(L, 1);
@@ -1925,7 +1935,7 @@ qtransform_map(lua_State *L)
         return 2; 
     } 
 #define DO(T,M) else if (type == qMetaTypeId<T>()) \
-      luaQ_pushqt(L, qVariantFromValue<T>(c.M(qVariantValue<T>(v))))
+      luaQ_pushqt(L, QVariant::fromValue<T>(c.M(v.value<T>())))
   DO(QPoint,map);
   DO(QPointF,map);
   DO(QLine,map);
@@ -2060,7 +2070,7 @@ qwidget_actions(lua_State *L)
   QVariantList vlist;
   QObjectPointer a;
   foreach(a, w->actions())
-    vlist += qVariantFromValue(a);
+    vlist += QVariant::fromValue(a);
   luaQ_pushqt(L, vlist);
   return 1;
 }
@@ -2093,9 +2103,9 @@ qwidget_render(lua_State *L)
     {
       QVariant v = luaQ_toqvariant(L, 2);
       if (v.userType() == qMetaTypeId<QPainter*>())
-        painter = qVariantValue<QPainter*>(v);
+        painter = v.value<QPainter*>();
       else if (v.userType() == qMetaTypeId<QPaintDevice*>())
-        device = qVariantValue<QPaintDevice*>(v);
+        device = v.value<QPaintDevice*>();
       else
         luaL_error(L, "Expecting QPainter* or QPaintDevice*");
     }
@@ -2129,17 +2139,13 @@ name_2_attribute(lua_State *L, const char *name,
     { "WA_Disabled", Qt::WA_Disabled },
     { "WA_UnderMouse", Qt::WA_UnderMouse },
     { "WA_MouseTracking", Qt::WA_MouseTracking },
-    { "WA_ContentsPropagated", Qt::WA_ContentsPropagated },
     { "WA_OpaquePaintEvent", Qt::WA_OpaquePaintEvent },
-    { "WA_NoBackground", Qt::WA_NoBackground },
     { "WA_StaticContents", Qt::WA_StaticContents },
     { "WA_LaidOut", Qt::WA_LaidOut },
     { "WA_PaintOnScreen", Qt::WA_PaintOnScreen },
     { "WA_NoSystemBackground", Qt::WA_NoSystemBackground },
     { "WA_UpdatesDisabled", Qt::WA_UpdatesDisabled },
     { "WA_Mapped", Qt::WA_Mapped },
-    { "WA_MacNoClickThrough", Qt::WA_MacNoClickThrough },
-    { "WA_PaintOutsidePaintEvent", Qt::WA_PaintOutsidePaintEvent },
     { "WA_InputMethodEnabled", Qt::WA_InputMethodEnabled },
     { "WA_WState_Visible", Qt::WA_WState_Visible },
     { "WA_WState_Hidden", Qt::WA_WState_Hidden },
@@ -2156,8 +2162,6 @@ name_2_attribute(lua_State *L, const char *name,
     { "WA_Moved", Qt::WA_Moved },
     { "WA_PendingUpdate", Qt::WA_PendingUpdate },
     { "WA_InvalidSize", Qt::WA_InvalidSize },
-    { "WA_MacBrushedMetal", Qt::WA_MacBrushedMetal },
-    { "WA_MacMetalStyle", Qt::WA_MacMetalStyle },
     { "WA_CustomWhatsThis", Qt::WA_CustomWhatsThis },
     { "WA_LayoutOnEntireRect", Qt::WA_LayoutOnEntireRect },
     { "WA_OutsideWSRange", Qt::WA_OutsideWSRange },
@@ -2177,12 +2181,10 @@ name_2_attribute(lua_State *L, const char *name,
     { "WA_WState_Reparented", Qt::WA_WState_Reparented },
     { "WA_WState_ConfigPending", Qt::WA_WState_ConfigPending },
     { "WA_WState_Polished", Qt::WA_WState_Polished },
-    { "WA_WState_DND", Qt::WA_WState_DND },
     { "WA_WState_OwnSizePolicy", Qt::WA_WState_OwnSizePolicy },
     { "WA_WState_ExplicitShowHide", Qt::WA_WState_ExplicitShowHide },
     { "WA_ShowModal", Qt::WA_ShowModal },
     { "WA_MouseNoMask", Qt::WA_MouseNoMask },
-    { "WA_GroupLeader", Qt::WA_GroupLeader },
     { "WA_NoMousePropagation", Qt::WA_NoMousePropagation },
     { "WA_Hover", Qt::WA_Hover },
     { "WA_InputMethodTransparent", Qt::WA_InputMethodTransparent },
@@ -2190,7 +2192,7 @@ name_2_attribute(lua_State *L, const char *name,
     { "WA_KeyboardFocusChange", Qt::WA_KeyboardFocusChange },
     { "WA_AcceptDrops", Qt::WA_AcceptDrops },
     { "WA_DropSiteRegistered", Qt::WA_DropSiteRegistered },
-    { "WA_ForceAcceptDrops", Qt::WA_ForceAcceptDrops },
+    { "WA_AcceptDrops", Qt::WA_AcceptDrops },
     { "WA_WindowPropagation", Qt::WA_WindowPropagation },
     { "WA_NoX11EventCompression", Qt::WA_NoX11EventCompression },
     { "WA_TintedBackground", Qt::WA_TintedBackground },
@@ -2205,7 +2207,6 @@ name_2_attribute(lua_State *L, const char *name,
     { "WA_MacMiniSize", Qt::WA_MacMiniSize },
     { "WA_LayoutUsesWidgetRect", Qt::WA_LayoutUsesWidgetRect },
     { "WA_StyledBackground", Qt::WA_StyledBackground },
-    { "WA_MSWindowsUseDirect3D", Qt::WA_MSWindowsUseDirect3D },
     { "WA_CanHostQMdiSubWindowTitleBar", Qt::WA_CanHostQMdiSubWindowTitleBar },
     { "WA_MacAlwaysShowToolWindow", Qt::WA_MacAlwaysShowToolWindow },
     { "WA_StyleSheet", Qt::WA_StyleSheet },
@@ -2214,7 +2215,7 @@ name_2_attribute(lua_State *L, const char *name,
     { "WA_X11BypassTransientForHint", Qt::WA_X11BypassTransientForHint },
     { "WA_NativeWindow", Qt::WA_NativeWindow },
     { "WA_DontCreateNativeAncestors", Qt::WA_DontCreateNativeAncestors },
-    { "WA_MacVariableSize", Qt::WA_MacVariableSize },
+    { "WA_MacNormalSize", Qt::WA_MacNormalSize },
     { "WA_DontShowOnScreen", Qt::WA_DontShowOnScreen },
     { "WA_X11NetWmWindowTypeDesktop", Qt::WA_X11NetWmWindowTypeDesktop },
     { "WA_X11NetWmWindowTypeDock", Qt::WA_X11NetWmWindowTypeDock },
@@ -2270,10 +2271,6 @@ name_2_window_flag(lua_State *L, const char *name,
     {"WindowContextHelpButtonHint", Qt::WindowContextHelpButtonHint, 0},
     {"WindowShadeButtonHint", Qt::WindowShadeButtonHint, 0},
     {"WindowStaysOnTopHint", Qt::WindowStaysOnTopHint, 0},
-#if QT_VERSION >= 0x40400
-    {"WindowOkButtonHint", Qt::WindowOkButtonHint, 0},
-    {"WindowCancelButtonHint", Qt::WindowCancelButtonHint, 0},
-#endif
     {"CustomizeWindowHint", Qt::CustomizeWindowHint, 0},
     {0,0,0}
   };
@@ -2391,7 +2388,7 @@ luaopen_libqtgui(lua_State *L)
   // load module 'qt'
   if (luaL_dostring(L, "require 'qt'"))
     lua_error(L);
-  if (QApplication::type() == QApplication::Tty)
+  if (!qApp || !qobject_cast<QApplication*>(qApp))
     luaL_error(L, "Graphics have been disabled (running with -nographics)");
 
   // register metatypes
@@ -2400,7 +2397,6 @@ luaopen_libqtgui(lua_State *L)
   qRegisterMetaType<QPolygon>("QPolygon");
   qRegisterMetaType<QPolygonF>("QPolygonF");
   qRegisterMetaType<QPainter*>("QPainter*");
-  qRegisterMetaType<QPrinter*>("QPrinter*");
   qRegisterMetaType<QPaintDevice*>("QPaintDevice*");
 
   // register object types

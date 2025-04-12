@@ -1,18 +1,30 @@
 # -*- cmake -*-
 
-INCLUDE_DIRECTORIES("${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}")
-INCLUDE(${QT_USE_FILE})		     
+INCLUDE(QtLuaMacros)
 
-SET(qtwidget_SRC 
+# Find Qt6 components
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets PrintSupport)
+
+INCLUDE_DIRECTORIES(
+  "${CMAKE_CURRENT_SOURCE_DIR}"
+  "${CMAKE_CURRENT_BINARY_DIR}"
+  "${QTLUA_INCLUDE_DIR}"
+  "${LUA_INCLUDE_DIR}"
+)
+
+SET(qtwidget_SRC
   qtluapainter.h qtluapainter.cpp
   qtluaprinter.h qtluaprinter.cpp
   qtlualistener.h qtlualistener.cpp
-  qtwidget.h qtwidget.cpp )
+  qtwidget.h qtwidget.cpp
+)
 
 MACRO_INSTALL_QTLUA_FILES(qtwidget init.lua)
 
-MACRO_QT4_AUTOGEN(qtwidget_GEN ${qtwidget_SRC})
-MACRO_ADD_QTLUA_MODULE(libqtwidget ${qtwidget_SRC} ${qtwidget_GEN})
-
-#ADD_TORCH_DOK(dok qtwidget "QT Interface" "Widgets and events" 6.)
-
+# Qt6's automoc handles the source generation
+MACRO_ADD_QTLUA_MODULE(libqtwidget ${qtwidget_SRC})
+TARGET_LINK_LIBRARIES(libqtwidget
+  Qt6::Gui
+  Qt6::Widgets
+  Qt6::PrintSupport
+)

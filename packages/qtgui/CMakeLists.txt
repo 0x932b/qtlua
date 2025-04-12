@@ -1,19 +1,24 @@
 # -*- cmake -*-
 
-IF (QT_QTWEBKIT_FOUND)
-  SET(QT_USE_QTWEBKIT 1)
-  SET(QT_USE_QTNETWORK 1)
-  ADD_DEFINITIONS("-DHAVE_QTWEBKIT=1")
-ENDIF (QT_QTWEBKIT_FOUND)
+INCLUDE(QtLuaMacros)
 
-INCLUDE(${QT_USE_FILE})		     
-INCLUDE_DIRECTORIES("${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}")
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets WebEngineWidgets)
+
+# WebEngine support
+ADD_DEFINITIONS("-DHAVE_QTWEBENGINE=1")
+
+INCLUDE_DIRECTORIES(
+  "${CMAKE_CURRENT_SOURCE_DIR}"
+  "${CMAKE_CURRENT_BINARY_DIR}"
+  "${QTLUA_INCLUDE_DIR}"
+  "${LUA_INCLUDE_DIR}"
+)
 
 SET(qtgui_SRC qtgui.h qtgui.cpp qtluagui.h qtluagui.cpp)
 
 MACRO_INSTALL_QTLUA_FILES(qtgui init.lua)
 
-MACRO_QT4_AUTOGEN(qtgui_GEN ${qtgui_SRC})
-MACRO_ADD_QTLUA_MODULE(libqtgui ${qtgui_SRC} ${qtgui_GEN})
+# Qt6's automoc handles the source generation
+MACRO_ADD_QTLUA_MODULE(libqtgui ${qtgui_SRC})
 
 #ADD_TORCH_DOK(dok qtgui "QT Interface" "GUI" 6.)

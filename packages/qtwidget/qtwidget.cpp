@@ -191,11 +191,11 @@ qtluapainter_new(lua_State *L)
   QVariant v = luaQ_toqvariant(L, 1);
   if (v.userType() == QMetaType::QPixmap)
     {
-      p = new QtLuaPainter(qVariantValue<QPixmap>(v));
+      p = new QtLuaPainter(v.value<QPixmap>());
     }
   else if (v.userType() == QMetaType::QImage)
     {
-      p = new QtLuaPainter(qVariantValue<QImage>(v));
+      p = new QtLuaPainter(v.value<QImage>());
     }
   else if (qobject_cast<QWidget*>(o))
     {
@@ -268,7 +268,7 @@ qtluapainter_v(showpage)
 #define qtluapainter_V(t,V) \
 static int qtluapainter_ ## t (lua_State *L) { \
   QtLuaPainter *p = luaQ_checkqobject<QtLuaPainter>(L, 1);\
-  luaQ_pushqt(L, qVariantFromValue<V>(p->t())); \
+  luaQ_pushqt(L, QVariant::fromValue<V>(p->t())); \
   return 1; }
 
 qtluapainter_V(rect, QRect)
@@ -499,7 +499,7 @@ static int qtluapainter_stringrect(lua_State *L)
   QString s =luaQ_checkqvariant<QString>(L, 2);
   if (lua_gettop(L) == 2)
     {
-      luaQ_pushqt(L, qVariantFromValue(p->stringrect(s)));
+      luaQ_pushqt(L, QVariant::fromValue(p->stringrect(s)));
     }
   else
     {
@@ -512,7 +512,7 @@ static int qtluapainter_stringrect(lua_State *L)
       QMetaEnum e = f_enumerator("TextFlags", mo);
       int f = e.keysToValue(sf);
       luaL_argcheck(L, f>=0, 7, "unrecognized flag");
-      luaQ_pushqt(L, qVariantFromValue(p->stringrect(s,x,y,w,h,f)));
+      luaQ_pushqt(L, QVariant::fromValue(p->stringrect(s,x,y,w,h,f)));
     }
   return 1;
 }
@@ -559,11 +559,11 @@ static int qtluapainter_image(lua_State *L)
     lua_pop(L, 1);
   }
   if (v.userType() == QMetaType::QImage) {
-    QImage q = qVariantValue<QImage>(v);
+    QImage q = v.value<QImage>();
     sw = q.width(); 
     sh = q.height(); 
   } else if (v.userType() == QMetaType::QPixmap) {
-    QPixmap q = qVariantValue<QPixmap>(v);
+    QPixmap q = v.value<QPixmap>();
     sw = q.width(); 
     sh = q.height();
   } else if (o) {
@@ -587,9 +587,9 @@ static int qtluapainter_image(lua_State *L)
   QRectF dst(x,y,w,h);
   QRectF src(sx,sy,sw,sh);
   if (v.userType() == QMetaType::QPixmap)
-    p->image(dst, qVariantValue<QPixmap>(v), src);
+    p->image(dst, v.value<QPixmap>(), src);
   else if (v.userType() == QMetaType::QImage)
-    p->image(dst, qVariantValue<QImage>(v), src);
+    p->image(dst, v.value<QImage>(), src);
   else if (o)
     p->image(dst, o, src);    
   return 0;
