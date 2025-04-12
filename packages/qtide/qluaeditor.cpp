@@ -25,7 +25,7 @@
 #include <QPointer>
 #include <QPrintDialog>
 #include <QPrinter>
-#include <QRegExp>
+#include <QRegularExpression>
 #include <QSettings>
 #include <QStatusBar>
 #include <QString>
@@ -118,10 +118,11 @@ QLuaEditor::Private::computeAutoMode()
 {
   QString suffix = QFileInfo(fileName).suffix();
   QString firstLine = e->document()->begin().text();
-  QRegExp re("-\\*-\\s(\\S+)\\s+-\\*-");
+  QRegularExpression re("-\\*-\\s(\\S+)\\s+-\\*-");
   bool ok = false;
-  if (! ok && re.indexIn(firstLine) >= 0)
-    ok = e->setEditorMode(re.cap(1));
+  QRegularExpressionMatch match = re.match(firstLine);
+  if (! ok && match.hasMatch())
+    ok = e->setEditorMode(match.captured(1));
   if (! ok && ! suffix.isEmpty())
     ok = e->setEditorMode(suffix);
   if (! ok)
@@ -187,7 +188,7 @@ QLuaEditor::Private::luaLoad(bool restart)
           cmd += f[i];
         else {
           char buf[8];
-          sprintf(buf,"\\%03o", (unsigned char)f[i]);
+          snprintf(buf, sizeof(buf), "\\%03o", (unsigned char)f[i]);
           cmd += buf;
         }
       cmd += "\')";
@@ -203,9 +204,11 @@ QLuaEditor::Private::luaLoad(bool restart)
 void 
 QLuaEditor::Private::updateMode(QLuaTextEditModeFactory *f)
 {
-  if  (modeGroup)
-    foreach(QAction *action, modeGroup->actions())
-      action->setChecked(qVariantValue<void*>(action->data()) == (void*)f);
+  if  (modeGroup) {
+    foreach(QAction *action, modeGroup->actions()) {
+      action->setChecked(action->data().value<void*>() == (void*)f);
+    }
+  }
 }
 
 
@@ -214,7 +217,7 @@ QLuaEditor::Private::doMode(QAction *action)
 {
   if (action)
     {
-      void *data = qVariantValue<void*>(action->data());
+      void *data = action->data().value<void*>();
       QLuaTextEditModeFactory *f = (data) ? (QLuaTextEditModeFactory*)data : 0;
       q->doMode(f);
     }
@@ -286,7 +289,7 @@ QLuaEditor::loadSettings()
       if (! QFontInfo(font).fixedPitch())
         font.setFamily("Courier");
       if (! QFontInfo(font).fixedPitch())
-        font.setFamily(QString::null);
+        font.setFamily(QString());
     }
   e->setFont(font);
   
@@ -489,7 +492,7 @@ QLuaEditor::createAction(QByteArray name)
           QAction *action = menu->addAction(mode->name());
           action->setStatusTip("Select the named editor mode.");
           action->setCheckable(true);
-          action->setData(qVariantFromValue<void*>(mode));
+          action->setData(QVariant::fromValue<void*>(mode));
           d->modeGroup->addAction(action);
         }
       QAction *noneAction = menu->addAction("None");
@@ -689,11 +692,11 @@ QLuaEditor::createStatusBar()
   d->sbMode = new QLabel();
   d->sbMode->setFont(font);
   d->sbMode->setAlignment(Qt::AlignCenter);
-  d->sbMode->setMinimumWidth(metric.width(" XXXX "));
+  d->sbMode->setMinimumWidth(metric.horizontalAdvance(" XXXX "));
   d->sbPosition = new QLabel();
   d->sbPosition->setFont(font);
   d->sbPosition->setAlignment(Qt::AlignCenter);
-  d->sbPosition->setMinimumWidth(metric.width(" L000 C00 "));
+  d->sbPosition->setMinimumWidth(metric.horizontalAdvance(" L000 C00 "));
   QStatusBar *sb = new QStatusBar(this);
   sb->addPermanentWidget(d->sbPosition);
   sb->addPermanentWidget(d->sbMode);
@@ -767,11 +770,7 @@ QLuaEditor::doPrint()
   QPrinter *printer = loadPageSetup();
   if (! d->printDialog)
     d->printDialog = new QPrintDialog(printer, this);
-  QPrintDialog::PrintDialogOptions options = d->printDialog->enabledOptions();
-  options &= ~QPrintDialog::PrintSelection;
-  if (d->e->textCursor().hasSelection())
-    options |= QPrintDialog::PrintSelection;
-  d->printDialog->setEnabledOptions(options);
+  d->printDialog->setOption(QAbstractPrintDialog::PrintSelection, d->e->textCursor().hasSelection());
   if (d->printDialog->exec() == QDialog::Accepted)
     {
       d->e->print(printer);

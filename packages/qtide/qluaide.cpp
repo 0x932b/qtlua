@@ -199,17 +199,26 @@ QLuaIde::Private::findEditor(QString fname)
 {
   QLuaEditor *e;
   QString cname = QFileInfo(fname).canonicalFilePath();
-  if (! cname.isEmpty())
-    foreach(QObject *o, windows)
-      if ((e = qobject_cast<QLuaEditor*>(o)))
-        if (e->fileName() == cname)
-          if (! e->isWindowModified())
-            return e;
-  if (! cname.isEmpty())
-    foreach(QObject *o, windows)
-      if ((e = qobject_cast<QLuaEditor*>(o)))
-        if (e->fileName() == cname)
+  if (! cname.isEmpty()) {
+   foreach(QObject *o, windows) {
+     if ((e = qobject_cast<QLuaEditor*>(o))) {
+       if (e->fileName() == cname) {
+         if (! e->isWindowModified()) {
+           return e;
+         }
+       }
+     }
+   }
+  }
+  if (! cname.isEmpty()) {
+   foreach(QObject *o, windows) {
+     if ((e = qobject_cast<QLuaEditor*>(o))) {
+        if (e->fileName() == cname) {
           return e;
+        }
+      }
+    }
+  }
   return 0;
 }
 
@@ -422,18 +431,18 @@ QLuaIde::Private::updateWindowMenu()
   QMenu *menu = (menuaction) ? menuaction->menu() : 0;
   if (menu)
     {
-      foreach(QAction *action, menu->actions())
-        if (action->isCheckable())
-          {
-            QObject *object = qVariantValue<QObject*>(action->data());
-            if (object && windows.contains(object))
-              {
+      foreach(QAction *action, menu->actions()) {
+        if (action->isCheckable()) {
+            QObject *object = action->data().value<QObject*>();
+            if (object && windows.contains(object)) {
                 QWidget *window = qobject_cast<QWidget*>(object);
                 action->setChecked(window && window == active);
-                if (window && window == returnTo)
-                  prevaction = action;
-              }
-          }
+                if (window && window == returnTo) {
+                    prevaction = action;
+                }
+            }
+        }
+      }
     }
   QAction *actionReturnToPrevious = q->hasAction("ActionReturnToPrevious");
   if (actionReturnToPrevious)
@@ -471,23 +480,25 @@ QLuaIde::Private::fillWindowMenu()
         }
       // window list
       int k = 0;
-      foreach(QObject *o, windows)
-        {
+      foreach(QObject *o, windows) {
           QWidget *w = qobject_cast<QWidget*>(o);
-          if (w == 0 || w == mdiMain)
-            continue;
+          if (w == 0 || w == mdiMain) {
+              continue;
+          }
           QAction *action = 0;
           QString s = w->windowTitle();
-          if (s.isEmpty())
-            continue;
+          if (s.isEmpty()) {
+              continue;
+          }
           action = menu->addAction(s.replace("[*]",""))
-            << qVariantFromValue<QObject*>(o)
+            << QVariant::fromValue<QObject*>(o)
             << Connection(this, SLOT(doWindowMenuItem()))
             << tr("Activate the specified window.");
           action->setCheckable(true);
-          if (++k < 10)
-            action->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_0 + k));
-        }
+          if (++k < 10) {
+              action->setShortcut(QKeySequence(QKeyCombination(Qt::KeyboardModifiers(Qt::CTRL), Qt::Key(Qt::Key_0 + k))));
+          }
+      }
     }
 }
 
@@ -498,7 +509,7 @@ QLuaIde::Private::doWindowMenuItem()
   QAction *a = qobject_cast<QAction*>(sender());
   if (a)
     {
-      QObject *o = qVariantValue<QObject*>(a->data());
+      QObject *o = a->data().value<QObject*>();
       if (o && windows.contains(o))
         {
           QWidget *w = qobject_cast<QWidget*>(o);
@@ -517,8 +528,7 @@ QLuaIde::Private::fillRecentMenu()
   if (menu)
     {
       menu->clear();
-      foreach (QString fname, recentFiles)
-        {
+      foreach (QString fname, recentFiles) {
           QFileInfo fi(fname);
           QString n = fi.fileName();
           QAction *action = menu->addAction(n);
@@ -528,7 +538,7 @@ QLuaIde::Private::fillRecentMenu()
           action->setData(fname);
           action->setStatusTip(tr("Open the named file."));
           connect(action,SIGNAL(triggered()),this,SLOT(doRecentMenuItem()));
-        }
+      }
       menu->addSeparator();
       QAction *action = menu->addAction(tr("&Clear"));
       action->setStatusTip(tr("Clear the history of recent files."));
@@ -654,9 +664,11 @@ QStringList
 QLuaIde::windowNames() const
 {
   QStringList s;
-  foreach(QObject *o, d->windows)
-    if (! o->objectName().isEmpty())
+  foreach(QObject *o, d->windows) {
+    if (! o->objectName().isEmpty()) {
       s += o->objectName();
+    }
+  }
   return s;
 }
 
@@ -1174,9 +1186,11 @@ QLuaIde::luaRestart(QByteArray cmd)
   QLuaApplication *app = QLuaApplication::instance();
   if (app->isAcceptingCommands())
     {
-      foreach(QObject *object, windows())
-        if (object->isWidgetType())
+      foreach(QObject *object, windows()) {
+        if (object->isWidgetType()) {
           saveWindowGeometry(static_cast<QWidget*>(object));
+        }
+      }
       d->executeWhenAccepting = cmd;
       app->restart();
       return true;
@@ -1273,13 +1287,13 @@ QLuaIde::fileDialogFilters()
 {
   bool needHtml = true;
   QStringList filters;
-  foreach(QLuaTextEditModeFactory *mode, 
-          QLuaTextEditModeFactory::factories())
-    {
+  foreach(QLuaTextEditModeFactory *mode,
+          QLuaTextEditModeFactory::factories()) {
       filters += mode->filter();
-      if (mode->suffixes().contains("html"))
+      if (mode->suffixes().contains("html")) {
         needHtml = false;
-    }
+      }
+  }
   if (needHtml)
     filters += htmlFilesFilter();
   filters += allFilesFilter();
@@ -1324,13 +1338,13 @@ QLuaIde::doOpen()
   QFileDialog::Options o = QFileDialog::DontUseNativeDialog;
   QStringList files = QFileDialog::getOpenFileNames(w, m, p, f, &s, o);
   bool inOther = false;
-  foreach(QString fname, files)
-    if (! fname.isEmpty())
-      {
+  foreach(QString fname, files) {
+    if (! fname.isEmpty()) {
         d->currentPath = QFileInfo(fname).absolutePath();
         openFile(fname, inOther, w);
         inOther = true;
-      }
+    }
+  }
 }
 
 

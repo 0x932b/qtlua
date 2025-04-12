@@ -267,8 +267,8 @@ QLuaMdiMain::Private::eventFilter(QObject *watched, QEvent *event)
   if (event->type() == QEvent::Resize)
     {
       QRect ar = area->rect().adjusted(+20,+20,-20,-20);
-      foreach(Client *client, clients)
-        if (client->subWindow && 
+      foreach(Client *client, clients) {
+        if (client->subWindow &&
             ! ar.intersects(client->subWindow->frameGeometry()) )
           {
             // move window to be at least partially visible
@@ -279,6 +279,7 @@ QLuaMdiMain::Private::eventFilter(QObject *watched, QEvent *event)
             gr.moveTop(qMin(gr.top(), ar.bottom()));
             client->subWindow->setGeometry(gr);
           }
+      }
     }
   if (event->type() == QEvent::WindowActivate)
     guiUpdateLater();
@@ -337,8 +338,9 @@ QLuaMdiMain::Private::guiUpdate()
   
   // menubar
   QMenuBar *menubar = q->menuBar();
-  foreach(QAction *a, menubar->actions())
+  foreach(QAction *a, menubar->actions()) {
     menubar->removeAction(a);
+  }
   if (! active || ! active->copyMenuBar(menubar))
     QLuaIde::instance()->defaultMenuBar(menubar);
   // dockaction
@@ -593,7 +595,7 @@ QLuaMdiMain::Client::disown()
 }
 
 
-void 
+void
 QLuaMdiMain::Client::fillToolMenu()
 {
   QMenu *menu = qobject_cast<QMenu*>(sender());
@@ -603,9 +605,12 @@ QLuaMdiMain::Client::fillToolMenu()
       menu->clear();
       QMenu *popup = main->createPopupMenu();
       if (popup)
-        foreach (QAction *action, popup->actions())
-          menu->addAction(action);
-      delete popup;
+        {
+          foreach (QAction *action, popup->actions()) {
+            menu->addAction(action);
+          }
+          delete popup;
+        }
     }
 }
 
@@ -1014,9 +1019,12 @@ QLuaMdiMain::adoptAll()
   // disown windows that do not belong
   QList<Client*> todel;
   if (!d->clientClass.isEmpty())
-    foreach(Client *c, d->clients)
-      if (c->widget && !c->widget->inherits(d->clientClass.constData()))
-        todel += c;
+    {
+      foreach(Client *c, d->clients) {
+        if (c->widget && !c->widget->inherits(d->clientClass.constData()))
+          todel += c;
+      }
+    }
   foreach(Client *c, todel)
     delete c;
   // adopt windows that belong
