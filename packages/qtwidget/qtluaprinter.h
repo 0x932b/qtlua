@@ -15,6 +15,7 @@
 #include <QRect>
 #include <QSizeF>
 #include <QString>
+#include <QPageLayout>
 
 
 
@@ -40,18 +41,19 @@ class QTWIDGET_API QtLuaPrinter : public QObject, public QPrinter
   Q_PROPERTY(QString printProgram READ printProgram WRITE setPrintProgram)
   Q_PROPERTY(int resolution READ resolution WRITE setResolution)
   Q_PROPERTY(int toPage READ toPage)
-  Q_PROPERTY(QRect paperRect READ paperRect)
-  Q_PROPERTY(QRect pageRect READ pageRect)
+  Q_PROPERTY(QRectF paperRect READ paperRect)
+  Q_PROPERTY(QRectF pageRect READ pageRect)
   Q_PROPERTY(QSizeF paperSize READ paperSize WRITE setPaperSize)
   Q_PROPERTY(QString printerState READ printerState)
   Q_ENUMS(PrinterState)
 
 public:
  ~QtLuaPrinter();
-  QtLuaPrinter(PrinterMode mode, QObject *parent=0)
-    : QObject(parent), QPrinter(mode), custom(false) {}
-  QtLuaPrinter(QObject *parent=0)
-    : QObject(parent), QPrinter(), custom(false) {}
+  QtLuaPrinter(int resolution=72, QObject *parent=0)
+    : QObject(parent), QPrinter() {
+    custom = false;
+    setResolution(resolution);
+  }
 
   Q_INVOKABLE QPrinter* printer() { return static_cast<QPrinter*>(this);}
   Q_INVOKABLE QPaintDevice* device() { return static_cast<QPaintDevice*>(this);}
@@ -61,11 +63,15 @@ public:
   Q_INVOKABLE bool setup(QWidget *parent=0);
 
   bool colorMode() const { return QPrinter::colorMode()==Color;}
-  void setColorMode(bool b) { QPrinter::setColorMode(b?Color:GrayScale);}
-  bool landscape() const { return orientation()==Landscape;}
-  void setLandscape(bool b) { setOrientation(b?Landscape:Portrait);}
-  bool lastPageFirst() const { return pageOrder()==LastPageFirst;}
-  void setLastPageFirst(bool b) { setPageOrder(b?LastPageFirst:FirstPageFirst);}
+  void setColorMode(bool b) { QPrinter::setColorMode(b ? QPrinter::Color : QPrinter::GrayScale); }
+  bool landscape() const { return QPrinter::pageLayout().orientation() == QPageLayout::Landscape; }
+  void setLandscape(bool b) {
+    QPageLayout layout = QPrinter::pageLayout();
+    layout.setOrientation(b ? QPageLayout::Landscape : QPageLayout::Portrait);
+    QPrinter::setPageLayout(layout);
+  }
+  bool lastPageFirst() const { return QPrinter::pageOrder() == QPrinter::LastPageFirst; }
+  void setLastPageFirst(bool b) { QPrinter::setPageOrder(b ? QPrinter::LastPageFirst : QPrinter::FirstPageFirst); }
   QString pageSize() const;
   void setPageSize(QString s);
   QString outputFormat() const;
@@ -73,6 +79,14 @@ public:
   QString printerState() const;
   QSizeF paperSize() const;
   void setPaperSize(QSizeF s);
+  
+  // Qt6 compatibility methods
+  QRectF paperRect() const { return QPrinter::paperRect(QPrinter::Point); }
+  QRectF pageRect() const { return QPrinter::pageRect(QPrinter::Point); }
+  bool doubleSidedPrinting() const { return QPrinter::duplex() != QPrinter::DuplexNone; }
+  void setDoubleSidedPrinting(bool enable) { QPrinter::setDuplex(enable ? QPrinter::DuplexAuto : QPrinter::DuplexNone); }
+  int numCopies() const { return QPrinter::copyCount(); }
+  void setNumCopies(int count) { QPrinter::setCopyCount(count); }
 private:
   QSizeF papSize;
   bool custom;

@@ -14,6 +14,8 @@
 #include <QMenuBar>
 #include <QPointer>
 #include <QPrinter>
+#include <QPageSize>
+#include <QMarginsF>
 #include <QSettings>
 #include <QStatusBar>
 #include <QString>
@@ -168,8 +170,8 @@ QLuaMainWindow::loadPageSetup()
   if (s.contains("printer/pageSize"))
     {
       int n = s.value("printer/pageSize").toInt();
-      if (n >= 0 || n < QPrinter::Custom)
-        printer->setPaperSize((QPrinter::PageSize)n);
+      if (n >= 0 || n < QPageSize::Custom)
+        printer->setPageSize(QPageSize((QPageSize::PageSizeId)n));
     }
   if (s.contains("printer/pageMargins/unit"))
     {
@@ -177,11 +179,11 @@ QLuaMainWindow::loadPageSetup()
       if (unit >= 0 && unit < QPrinter::DevicePixel)
         {
           qreal left,top,right,bottom;
-          left = s.value("printer/pageMargins/left").toDouble();  
-          top = s.value("printer/pageMargins/top").toDouble();  
-          right = s.value("printer/pageMargins/right").toDouble();  
+          left = s.value("printer/pageMargins/left").toDouble();
+          top = s.value("printer/pageMargins/top").toDouble();
+          right = s.value("printer/pageMargins/right").toDouble();
           bottom = s.value("printer/pageMargins/bottom").toDouble();
-          printer->setPageMargins(left,top,right,bottom,(QPrinter::Unit)unit);
+          printer->setPageMargins(QMarginsF(left, top, right, bottom), QPageLayout::Millimeter);
         }
     }
   return printer;
@@ -195,17 +197,19 @@ QLuaMainWindow::savePageSetup()
   if (printer)
     {
       QSettings s;
-      QPrinter::PageSize ps = printer->paperSize();
-      if (ps < QPrinter::Custom)
-        s.setValue("printer/pageSize", (int)(printer->pageSize()));
-      qreal left,top,right,bottom;
-      QPrinter::Unit unit = QPrinter::Millimeter;
-      printer->getPageMargins(&left,&top,&right,&bottom,unit);
-      s.setValue("printer/pageMargins/left", left);  
-      s.setValue("printer/pageMargins/top", top);  
-      s.setValue("printer/pageMargins/right", right);  
+      QPageSize ps = printer->pageLayout().pageSize();
+      if (ps.id() < QPageSize::Custom)
+        s.setValue("printer/pageSize", (int)(ps.id()));
+      QMarginsF margins = printer->pageLayout().margins(QPageLayout::Millimeter);
+      qreal left = margins.left();
+      qreal top = margins.top();
+      qreal right = margins.right();
+      qreal bottom = margins.bottom();
+      s.setValue("printer/pageMargins/left", left);
+      s.setValue("printer/pageMargins/top", top);
+      s.setValue("printer/pageMargins/right", right);
       s.setValue("printer/pageMargins/bottom", bottom);
-      s.setValue("printer/pageMargins/unit", (int)unit);
+      s.setValue("printer/pageMargins/unit", (int)QPageLayout::Millimeter);
     }
 }
 
