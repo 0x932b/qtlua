@@ -3,7 +3,7 @@
 #include <QtGlobal>
 #include <QDebug>
 #include <QList>
-#include <QRegExp>
+#include <QRegularExpression>
 #include <QSharedData>
 #include <QSharedDataPointer>
 
@@ -58,7 +58,7 @@ public:
                           const QLuaModeUserData *idata, 
                           QLuaModeUserData *&odata );
 private:
-  QRegExp reHighlight;
+  QRegularExpression reHighlight;
 };
 
 
@@ -91,7 +91,7 @@ QLuaModeText::parseBlock(int pos, const QTextBlock &block,
     *data = *static_cast<const UserData*>(idata);
   
   // highlight
-  if (text.contains(reHighlight))
+  if (text.contains(reHighlight.pattern()))
     setFormat(pos, len, "quote");
   
   // indentation
@@ -105,7 +105,7 @@ QLuaModeText::parseBlock(int pos, const QTextBlock &block,
   // matches
   for (int i=0; i<len; i++)
     {
-      char ic = text[i].toAscii();
+      char ic = text[i].toLatin1();
       if (ic=='(' || ic=='[' || ic=='{')
         {
           PMatch m(new Match);

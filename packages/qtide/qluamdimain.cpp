@@ -13,7 +13,7 @@
 #include <QMenuBar>
 #include <QMoveEvent>
 #include <QPointer>
-#include <QRegExp>
+#include <QRegularExpression>
 #include <QResizeEvent>
 #include <QSet>
 #include <QSettings>
@@ -352,7 +352,7 @@ QLuaMdiMain::Private::guiUpdate()
     {
       modified = active->widget->isWindowModified();
       QString wtitle = active->widget->windowTitle();
-      title = wtitle.replace(QRegExp(" -+ .*$"), " - ") + title;
+      title = wtitle.replace(QRegularExpression(" -+ .*$"), " - ") + title;
     }
   q->setWindowTitle(title);
   q->setWindowModified(modified);
@@ -458,7 +458,7 @@ QLuaMdiMain::Client::computeWindowTitle()
       if (d->tabMode && subWindow)
         {
           if (title.contains("[*] - "))
-            title.replace(QRegExp("\\[\\*\\] - .*$"), "[*]");
+            title.replace(QRegularExpression("\\[\\*\\] - .*$"), "[*]");
         }
       if (subWindow)
         w = subWindow;

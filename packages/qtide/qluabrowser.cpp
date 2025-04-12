@@ -22,7 +22,7 @@
 #include <QPrintDialog>
 #include <QPrinter>
 #include <QProgressBar>
-#include <QRegExp>
+#include <QRegularExpression>
 #include <QSettings>
 #include <QShortcut>
 #include <QStatusBar>
@@ -402,7 +402,7 @@ QLuaBrowser::toHtml() const
 #if HAVE_QTWEBKIT
   return d->w->page()->mainFrame()->toHtml();
 #else
-  return QString::null;
+  return QString();
 #endif
 }
 

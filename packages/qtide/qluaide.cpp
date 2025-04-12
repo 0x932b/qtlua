@@ -20,7 +20,7 @@
 #include <QPageSetupDialog>
 #include <QPainter>
 #include <QPointer>
-#include <QRegExp>
+#include <QRegularExpression>
 #include <QSet>
 #include <QSettings>
 #include <QString>
@@ -398,15 +398,15 @@ QLuaIde::Private::errorMessage(QByteArray m)
       for (int i = location.size()-1; i>=0; --i)
         {
           QString loc = location.at(i);
-          QRegExp re3("^@(.+):([0-9]+)$");
-          re3.setMinimal(true);
-          if (re3.indexIn(loc) >= 0)
-            if (errorMessageFname(re3.cap(1), re3.cap(2).toInt(), message, i))
+          QRegularExpression re3("^@(.+):([0-9]+)$");
+          QRegularExpressionMatch match3 = re3.match(loc);
+          if (match3.hasMatch())
+            if (errorMessageFname(match3.captured(1), match3.captured(2).toInt(), message, i))
               continue;
-          QRegExp re4("^qt\\.(.+):([0-9]+)$");
-          re4.setMinimal(true);
-          if (re4.indexIn(loc) >= 0)
-            if (errorMessageEname(re4.cap(1), re4.cap(2).toInt(), message, i))
+          QRegularExpression re4("^qt\\.(.+):([0-9]+)$");
+          QRegularExpressionMatch match4 = re4.match(loc);
+          if (match4.hasMatch())
+            if (errorMessageEname(match4.captured(1), match4.captured(2).toInt(), message, i))
               continue;
         }
     }

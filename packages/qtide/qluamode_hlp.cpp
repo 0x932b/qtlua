@@ -3,7 +3,7 @@
 #include <QtGlobal>
 #include <QDebug>
 #include <QList>
-#include <QRegExp>
+#include <QRegularExpression>
 #include <QStack>
 
 
@@ -53,24 +53,22 @@ public:
                           QLuaModeUserData *&odata );
   void gotLine(UserData *d, int pos, int len, QString);
 private:
-  QRegExp reSection, reHRule, reIndent, reEmpty, reToken;
-  QRegExp reFormat1, reFormat2, reEVerb;
+  QRegularExpression reSection, reHRule, reIndent, reEmpty, reToken;
+  QRegularExpression reFormat1, reFormat2, reEVerb;
 };
 
 
 QLuaModeHelp::QLuaModeHelp(QLuaTextEditModeFactory *f, QLuaTextEdit *e)
   : QLuaMode(f,e), 
-    reSection("^\\-\\-\\-\\+.*$"),
-    reHRule("^(\\-\\-\\-)+"),
-    reIndent("^(   |\t)+(\\*|[1aAiI]\\.|\\$(?=.+:\\s+.*\\$))[ \t]+"),
-    reEmpty("^\\s*$"),
-    reToken("(<[^>]*>?|#\\w+|\\[\\[|\\]\\[|\\]\\]|==|__|\\*|=|_)"),
-    reFormat1("^(==|__|\\*|=|_)(\\S+\\S?)(\\1)"),
-    reFormat2("^(==|__|\\*|=|_)(\\S.*\\S)(\\1)"),
-    reEVerb("</verbatim>")
+    reSection(QStringLiteral("^\\-\\-\\-\\+.*$")),
+    reHRule(QStringLiteral("^(\\-\\-\\-)+")),
+    reIndent(QStringLiteral("^(   |\t)+(\\*|[1aAiI]\\.|\\$(?=.+:\\s+.*\\$))[ \t]+")),
+    reEmpty(QStringLiteral("^\\s*$")),
+    reToken(QStringLiteral("(<[^>]*>?|#\\w+|\\[\\[|\\]\\[|\\]\\]|==|__|\\*|=|_)")),
+    reFormat1(QStringLiteral("^(==|__|\\*|=|_)(\\S+\\S?)(\\1)"), QRegularExpression::InvertedGreedinessOption),
+    reFormat2(QStringLiteral("^(==|__|\\*|=|_)(\\S.*\\S)(\\1)")),
+    reEVerb(QStringLiteral("</verbatim>"))
 {
-  reFormat1.setMinimal(false);
-  reFormat2.setMinimal(true);
 }
 
 
@@ -111,8 +109,10 @@ QLuaModeHelp::gotLine(UserData *d, int pos, int len, QString line)
       int p;
       if (d->verbatim)
         {
-          if ((p = reEVerb.indexIn(line, i)) >= 0)
+          QRegularExpressionMatch match = reEVerb.match(line, i);
+          if (match.hasMatch())
             {
+              p = match.capturedStart();
               setFormat(pos, p, "string");
               setIndentOverlay(pos+p);
               d->verbatim = false;
@@ -127,43 +127,46 @@ QLuaModeHelp::gotLine(UserData *d, int pos, int len, QString line)
         }
       if (i == 0)
         {
-          if ((pos == 0) || (p = reSection.indexIn(line, i)) >= 0)
+          if (pos == 0 || reSection.match(line.mid(i)).hasMatch())
             {
               setFormat(pos,len-1,"comment");
               setIndent(pos+0, 0);
               i = len;
               continue;
             }
-          if ((p = reHRule.indexIn(line, i)) >= 0)
+          QRegularExpressionMatch hruleMatch = reHRule.match(line, i);
+          if (hruleMatch.hasMatch())
             {
-              int l = reHRule.matchedLength();
+              int l = hruleMatch.capturedLength();
               setFormat(pos, l, "keyword");
               setIndent(pos, -1);
               i = i + l;
               continue;
-             
             }
-          if ((p = reIndent.indexIn(line, i)) >= 0)
+          QRegularExpressionMatch indentMatch = reIndent.match(line, i);
+          if (indentMatch.hasMatch())
             {
-              int l = reIndent.matchedLength();
-              int m = reIndent.pos(2);
+              int l = indentMatch.capturedLength();
+              int m = indentMatch.capturedStart(2);
               setFormat(pos, l, "keyword");
               setIndent(pos, e->indentAt(m));
               setIndent(pos+l, e->indentAt(pos+l));
               i = i + l;
               continue;
             }
-          if ((p = reEmpty.indexIn(line, i)) >= 0)
+          if (reEmpty.match(line, i).hasMatch())
             {
               setIndent(pos+1, -1);
               i = len;
               continue;
             }
         }
-      if ((p = reToken.indexIn(line, i)) >= 0)
+      QRegularExpressionMatch tokenMatch = reToken.match(line, i);
+      if (tokenMatch.hasMatch())
         {
-          int l = reToken.matchedLength();
-          QString k = line.mid(p, l);
+          p = tokenMatch.capturedStart();
+          int l = tokenMatch.capturedLength();
+          QString k = tokenMatch.captured();
           setFormat(pos+p, l, "keyword");
           if (k == "]]" && matchLen>0)
             {
@@ -215,21 +218,26 @@ QLuaModeHelp::gotLine(UserData *d, int pos, int len, QString line)
               int q;
               int q1 = p;
               int q2 = p;
-              if ((q = reFormat1.indexIn(line, p, 
-                                         QRegExp::CaretAtOffset) ) == p)
+              QRegularExpressionMatch match1 = reFormat1.match(line, p, QRegularExpression::NormalMatch, QRegularExpression::AnchorAtOffsetMatchOption);
+              if (match1.hasMatch() && match1.capturedStart() == p)
                 {
-                  l = reFormat1.matchedLength();
-                  k = reFormat1.cap(1);
-                  q1 = reFormat1.pos(2);
-                  q2 = reFormat1.pos(3);
+                  l = match1.capturedLength();
+                  k = match1.captured(1);
+                  q1 = match1.capturedStart(2);
+                  q2 = match1.capturedStart(3);
+                  q = p;
                 }
-              else if ((q = reFormat2.indexIn(line, p, 
-                                              QRegExp::CaretAtOffset) ) == p)
+              else
                 {
-                  l = reFormat2.matchedLength();
-                  k = reFormat2.cap(1);
-                  q1 = reFormat2.pos(2);
-                  q2 = reFormat2.pos(3);
+                  QRegularExpressionMatch match2 = reFormat2.match(line, p, QRegularExpression::NormalMatch, QRegularExpression::AnchorAtOffsetMatchOption);
+                  if (match2.hasMatch() && match2.capturedStart() == p)
+                    {
+                      l = match2.capturedLength();
+                      k = match2.captured(1);
+                      q1 = match2.capturedStart(2);
+                      q2 = match2.capturedStart(3);
+                      q = p;
+                    }
                 }
               QTextCharFormat fmt = e->format("Help/string");
               if (k == "__" || k == "==" || k == "*")

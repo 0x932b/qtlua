@@ -7,7 +7,7 @@
 #include <QList>
 #include <QMap>
 #include <QPointer>
-#include <QRegExp>
+#include <QRegularExpression>
 #include <QSettings>
 #include <QSharedData>
 #include <QSharedDataPointer>
@@ -210,7 +210,7 @@ public:
                           QLuaModeUserData *&odata );
 private:
   QMap<QString,TokenType> keywords;
-  QRegExp reNum, reId, reType, reSym; 
+  QRegularExpression reNum, reId, reType, reSym;
   int bi;
 };
 
@@ -219,11 +219,11 @@ QLuaModeC::QLuaModeC(QLuaTextEditModeFactory *f, QLuaTextEdit *e)
   : QLuaMode(f,e), bi(2)
 {
   // regexps
-  reNum = QRegExp("^(0x[0-9a-fA-F]+|0b[01]+|0[0-7]+"
+  reNum = QRegularExpression("^(0x[0-9a-fA-F]+|0b[01]+|0[0-7]+"
                   "|(\\.[0-9]+|[0-9]+(\\.[0-9]*)?)([Ee][-+]?[0-9]*)?)");
-  reId = QRegExp("^[A-Za-z_$][A-Za-z0-9_$]*");
-  reType = QRegExp("^(.+_t|(lua_)?[A-Z].*)$");
-  reSym = QRegExp("^(::|.)");
+  reId = QRegularExpression("^[A-Za-z_$][A-Za-z0-9_$]*");
+  reType = QRegularExpression("^(.+_t|(lua_)?[A-Z].*)$");
+  reSym = QRegularExpression("^(::|.)");
   // basic indent
   QSettings s;
   s.beginGroup("CMode");
@@ -307,8 +307,8 @@ QLuaModeC::gotLine(UserData *d, int pos, int len, QString s)
             r = p; state = LexComment;
             setIndentOverlay(pos+p+1, -1);
           } else if ((isalpha(c) || c=='_') &&
-                     (reId.indexIn(s,p,QRegExp::CaretAtOffset)>=0) ) {
-            int l = reId.matchedLength();
+                     (reId.match(s, p, QRegularExpression::NormalMatch, QRegularExpression::AnchorAtOffsetMatchOption).hasMatch()) ) {
+            int l = reId.match(s, p, QRegularExpression::NormalMatch, QRegularExpression::AnchorAtOffsetMatchOption).capturedLength();
             QString m = s.mid(p,l);
             TokenType type = Identifier;
             if (cppstate == LexCppStart) {
@@ -319,22 +319,22 @@ QLuaModeC::gotLine(UserData *d, int pos, int len, QString s)
                 setFormat(pos+p, l, "type");
               else
                 setFormat(pos+p, l, "keyword");
-            } else if (m.contains(reType)) {
+            } else if (reType.match(m).hasMatch()) {
               type = Type;
               setFormat(pos+p, l, "type");
             }
             if (!cppstate)
               gotToken(d, pos+r, p-r, m, type);
             p += l - 1;
-          } else if (reNum.indexIn(s,p,QRegExp::CaretAtOffset)>=0) {
-            int l = reNum.matchedLength();
+          } else if (reNum.match(s, p, QRegularExpression::NormalMatch, QRegularExpression::AnchorAtOffsetMatchOption).hasMatch()) {
+            int l = reNum.match(s, p, QRegularExpression::NormalMatch, QRegularExpression::AnchorAtOffsetMatchOption).capturedLength();
             QString m = s.mid(p,l);
             setFormat(pos+p, l, "number");
             if (! cppstate)
               gotToken(d, pos+p, l, m, Number);
             p += l - 1;
-          } else if (reSym.indexIn(s,p,QRegExp::CaretAtOffset)>=0) {
-            int l = reSym.matchedLength();
+          } else if (reSym.match(s, p, QRegularExpression::NormalMatch, QRegularExpression::AnchorAtOffsetMatchOption).hasMatch()) {
+            int l = reSym.match(s, p, QRegularExpression::NormalMatch, QRegularExpression::AnchorAtOffsetMatchOption).capturedLength();
             QString m = s.mid(p,l);
             TokenType type = Other;
             if (keywords.contains(m)) 

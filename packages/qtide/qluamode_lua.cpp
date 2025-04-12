@@ -7,10 +7,11 @@
 #include <QList>
 #include <QMap>
 #include <QPointer>
-#include <QRegExp>
+#include <QRegularExpression>
 #include <QSettings>
 #include <QSharedData>
 #include <QSharedDataPointer>
+#include <algorithm>
 
 
 #include "qluaapplication.h"
@@ -173,16 +174,16 @@ public:
   virtual bool doComplete();
 private:
   QMap<QString,TokenType> keywords;
-  QRegExp reNum, reSym, reId;
+  QRegularExpression reNum, reSym, reId;
   int bi;
 };
 
 
 QLuaModeLua::QLuaModeLua(QLuaTextEditModeFactory *f, QLuaTextEdit *e)
   : QLuaMode(f,e),
-    reNum("^(0x[0-9a-fA-F]+|\\.[0-9]+|[0-9]+(\\.[0-9]*)?([Ee][-+]?[0-9]*)?)"),
-    reSym("^(\\.\\.\\.|<=|>=|==|~=|.)"),
-    reId("^[A-Za-z_][A-Za-z0-9_]*"),
+    reNum(QStringLiteral("^(0x[0-9a-fA-F]+|\\.[0-9]+|[0-9]+(\\.[0-9]*)?([Ee][-+]?[0-9]*)?)"), QRegularExpression::NoPatternOption),
+    reSym(QStringLiteral("^(\\.\\.\\.|<=|>=|==|~=|.)"), QRegularExpression::NoPatternOption),
+    reId(QStringLiteral("^[A-Za-z_][A-Za-z0-9_]*"), QRegularExpression::NoPatternOption),
     bi(3)
 {
   // basic indent
@@ -236,7 +237,7 @@ QLuaModeLua::gotLine(UserData *d, int pos, int len, QString s)
   int slen = s.size();
   while (p < len)
     {
-      int c = (p < slen) ? s[p].toAscii() : '\n';
+      int c = (p < slen) ? s[p].toLatin1() : '\n';
       switch(state)
         {
         case 0:
@@ -282,16 +283,16 @@ QLuaModeLua::gotLine(UserData *d, int pos, int len, QString s)
                                  e->indentAfter(pos+t+1, +1) );
               }
             }
-          } else if (reNum.indexIn(s,p,QRegExp::CaretAtOffset)>=0) {
-            int l = reNum.matchedLength();
-            QString m = s.mid(p,l);
+          } else if (QRegularExpressionMatch match = reNum.match(s, p, QRegularExpression::NormalMatch, QRegularExpression::AnchorAtOffsetMatchOption); match.hasMatch() && match.capturedStart() == p) {
+            int l = match.capturedLength();
+            QString m = match.captured();
             setFormat(pos+p, l, "number");
             gotToken(d, pos+p, l, m, Number);
             p += l - 1;
-          } else if (reSym.indexIn(s,p,QRegExp::CaretAtOffset)>=0) {
-            int l = reSym.matchedLength();
-            QString m = s.mid(p,l);
-            if (keywords.contains(m)) 
+          } else if (QRegularExpressionMatch match = reSym.match(s, p, QRegularExpression::NormalMatch, QRegularExpression::AnchorAtOffsetMatchOption); match.hasMatch() && match.capturedStart() == p) {
+            int l = match.capturedLength();
+            QString m = match.captured();
+            if (keywords.contains(m))
               gotToken(d, pos+p, l, QString(), keywords[m]);
             else
               gotToken(d, pos+p, l, m, Other);
@@ -597,7 +598,7 @@ comp_lex(QString s, int len, int state, int n, int &q)
         {
         default:
         case -1: // misc
-          if (isalpha(s[p].toAscii()) || s[p]=='_') {
+          if (isalpha(s[p].toLatin1()) || s[p]=='_') {
             q = p; state = -2; 
           } else if (s[p]=='\'') {
             q = p+1; z = s[p]; n = 0; state = -3; 
@@ -625,7 +626,7 @@ comp_lex(QString s, int len, int state, int n, int &q)
           }
           break;
         case -2: // identifier
-          if (!isalnum(s[p].toAscii()) && s[p]!='_' && s[p]!='.' && s[p]!=':') {
+          if (!isalnum(s[p].toLatin1()) && s[p]!='_' && s[p]!='.' && s[p]!=':') {
             state = -1; continue;
           }
           break;
@@ -689,7 +690,7 @@ QLuaModeLua::doComplete()
   int selected = 0;
   if (completions.size() > 1)
     {
-      qSort(completions.begin(), completions.end());
+      std::sort(completions.begin(), completions.end());
       for (int i=completions.size()-2; i>=0; i--)
         if (completions[i] == completions[i+1])
           completions.removeAt(i);
@@ -761,7 +762,7 @@ escapeString(const char *s)
         r += c;
       else {
         char buffer[8];
-        sprintf(buffer, "\\%03o", c);
+        snprintf(buffer, sizeof(buffer), "\\%03o", c);
         r += buffer;
       }
     }
@@ -780,7 +781,7 @@ QStringList
 QLuaModeLua::computeFileCompletions(QString s, bool escape, QString &stem)
 {
   QStringList list;
-  s.remove(QRegExp("^.*\\s"));
+  s.remove(QRegularExpression("^.*\\s"));
   stem = s;
   if (escape)
     stem = unescapeString(s);
@@ -815,7 +816,7 @@ QLuaModeLua::computeSymbolCompletions(QString s, QString &stem)
   QByteArray f = s.toLocal8Bit();
   int flen = f.size();
   // stem
-  stem = s.remove(QRegExp("^.*[.:]"));
+  stem = s.remove(QRegularExpression("^.*[.:]"));
   // keywords
   for (const char **k = comp_keywords; *k; k++)
     if (!strncmp(f.constData(), *k, flen))
