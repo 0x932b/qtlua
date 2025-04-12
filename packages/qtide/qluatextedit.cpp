@@ -25,7 +25,7 @@
 #include <QPointer>
 #include <QPrinter>
 #include <QPushButton>
-#include <QRegExp>
+#include <QRegularExpression>
 #include <QSettings>
 #include <QShortcut>
 #include <QString>
@@ -207,7 +207,7 @@ QLuaTextEdit::FindDialog::find(bool backward)
 {
   if (ui.findEdit->text().isEmpty())
     return false;
-  QTextDocument::FindFlags flags = 0;
+  QTextDocument::FindFlags flags = QTextDocument::FindFlags();
   if (backward)
     flags |= QTextDocument::FindBackward;
   if (ui.caseSensitiveBox->isChecked())
@@ -332,7 +332,7 @@ QLuaTextEdit::ReplaceDialog::find(bool backwards)
 {
   if (ui.findEdit->text().isEmpty())
     return false;
-  QTextDocument::FindFlags flags = 0;
+  QTextDocument::FindFlags flags = QTextDocument::FindFlags();
   if (backwards)
     flags |= QTextDocument::FindBackward;
   if (ui.caseSensitiveBox->isChecked())
@@ -372,7 +372,7 @@ QLuaTextEdit::ReplaceDialog::replace()
 void
 QLuaTextEdit::ReplaceDialog::replaceAll()
 {
-  QTextDocument::FindFlags flags = 0;
+  QTextDocument::FindFlags flags = QTextDocument::FindFlags();
   if (ui.caseSensitiveBox->isChecked())
     flags |= QTextDocument::FindCaseSensitively;
   if (ui.wholeWordsBox->isChecked())
@@ -495,7 +495,7 @@ QLuaTextEdit::LineNumbers::sizeHint() const
   QFont font = e->font();
   font.setWeight(QFont::Bold);
   QFontMetrics metrics(font);
-  return QSize(metrics.width(s), 0);
+  return QSize(metrics.horizontalAdvance(s), 0);
 }
 
 
@@ -635,7 +635,7 @@ QLuaTextEdit::Private::filterText(QString data)
   for (int i=0; i<data.size(); i++)
     {
       QChar c = data.at(i);
-      int ic = c.toAscii();
+      int ic = c.toLatin1();
       if (ic == '\t')
         {
           int tpos = (int)((pos + tabSize) / tabSize) * tabSize;
@@ -924,9 +924,13 @@ QLuaTextEdit::setEditorMode(QString suffix)
       factory = f;
   suffix = suffix.toLower();
   if (! factory)
-    foreach(QLuaTextEditModeFactory *f, list)
-      if (f->suffixes().contains(suffix))
-        factory = f;
+    {
+      foreach(QLuaTextEditModeFactory *f, list) {
+        if (f->suffixes().contains(suffix)) {
+          factory = f;
+        }
+      }
+    }
   if (factory)
     return setEditorMode(factory);
   return false;
@@ -1035,9 +1039,11 @@ QLuaTextEdit::print(QPrinter *printer)
            srcBlock.isValid() && dstBlock.isValid();
            srcBlock = srcBlock.next(), dstBlock = dstBlock.next())
         {
-          QTextLayout *d = dstBlock.layout();
-          QTextLayout *s = srcBlock.layout();
-          d->setAdditionalFormats(s->additionalFormats());
+          // In Qt6, we work with QTextBlock directly
+          dstBlock.layout()->clearFormats();
+          for (const QTextLayout::FormatRange &range : srcBlock.layout()->formats()) {
+              dstBlock.layout()->setFormats({range});
+          }
         }
     }
   // make sure we wrap lines
@@ -1061,10 +1067,10 @@ QLuaTextEdit::print(QPrinter *printer)
   doc->setPageSize(size = size * 1.414);
   // prepare painter
   QPainter p(printer);
-  const QSizeF pSize(printer->pageRect().size());
+  const QSizeF pSize(printer->pageRect(QPrinter::Point).size());
   p.scale(pSize.width()/size.width(), pSize.height()/size.height());
   int pageCopies = 1;
-  int docCopies = printer->numCopies();
+  int docCopies = printer->copyCount();
   if (printer->collateCopies())
     qSwap(docCopies, pageCopies);
   int fromPage = printer->fromPage();
@@ -1125,7 +1131,7 @@ QSize
 QLuaTextEdit::sizeHint() const
 {
   QFontMetrics fontMetrics(font());
-  int cellw = fontMetrics.width("MM") - fontMetrics.width("M");
+  int cellw = fontMetrics.horizontalAdvance("MM") - fontMetrics.horizontalAdvance("M");
   int cellh = fontMetrics.lineSpacing();
   int w = d->sizeInChars.width();
   int h = d->sizeInChars.height();
@@ -1133,8 +1139,8 @@ QLuaTextEdit::sizeHint() const
   if (d->showLineNumbers)
     w += 5;
   int t = cellw * d->tabSize;
-  if (t != tabStopWidth())
-    const_cast<QLuaTextEdit*>(this)->setTabStopWidth(t);
+  if (t != tabStopDistance())
+    const_cast<QLuaTextEdit*>(this)->setTabStopDistance(t);
   return QSize(cellw * w, cellh * h);
 }
 
@@ -1199,7 +1205,7 @@ QLuaTextEdit::indentAt(int pos, QTextBlock block)
       int ss = text.size();
       int e = pos-block.position();
       for (int i=0; i<e && i<ss; i++)
-        if (text[i].toAscii() == '\t') 
+        if (text[i].toLatin1() == '\t')
           c = ((int)(c / ts) + 1) * ts;
         else
           c = c + 1;
@@ -1246,7 +1252,7 @@ QLuaTextEdit::getBlockIndent(QTextBlock block, int &indent)
   int i;
   indent = 0;
   for (i=0; i<ss && text[i].isSpace(); i++)
-    indent += (text[i].toAscii() == '\t') ? ts : 1;
+    indent += (text[i].toLatin1() == '\t') ? ts : 1;
   if (i >= ss)
     indent = -1;
   return block.position() + i;
@@ -1381,14 +1387,12 @@ QLuaTextEdit::format(QString key)
       fmt.setFontWeight(i);
   }
   if (s.contains("color")) {
-    QColor c;
-    c.setNamedColor(s.value("color").toString());
+    QColor c = QColor::fromString(s.value("color").toString());
     if (c.isValid())
       fmt.setForeground(c);
   }
   if (s.contains("bgcolor")) {
-    QColor c;
-    c.setNamedColor(s.value("bgcolor").toString());
+    QColor c = QColor::fromString(s.value("bgcolor").toString());
     if (c.isValid())
       fmt.setBackground(c);
   }

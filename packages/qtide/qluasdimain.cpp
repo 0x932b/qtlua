@@ -9,7 +9,7 @@
 #include <QCursor>
 #include <QDateTime>
 #include <QDebug>
-#include <QDesktopWidget>
+#include <QScreen>
 #include <QDir>
 #include <QDialog>
 #include <QFile>
@@ -38,7 +38,7 @@
 #include <QPrintDialog>
 #include <QPrinter>
 #include <QPushButton>
-#include <QRegExp>
+#include <QRegularExpression>
 #include <QScrollBar>
 #include <QSplitter>
 #include <QSettings>
@@ -699,7 +699,7 @@ QLuaSdiMain::HSWidget::exec(QPoint pos)
   adjustSize();
   int rw = width() * 3 / 2;
   int rh = height();
-  QRect screen = QApplication::desktop()->availableGeometry(this);
+  QRect screen = window()->screen()->availableGeometry();
   if (tl.y() >= screen.height()-br.y())
     pos.ry() = tl.y() - rh + 4;
   if (pos.x() + rw > screen.x() + screen.width()) 
@@ -942,10 +942,10 @@ QLuaSdiMain::loadSettings()
       if (! QFontInfo(font).fixedPitch())
         font.setFamily("Courier");
       if (! QFontInfo(font).fixedPitch())
-        font.setFamily(QString::null);
+        font.setFamily(QString());
     }
   QFontMetrics metrics(font);
-  e->setMinimumSize(QSize(metrics.width("MM"), metrics.lineSpacing()*3));
+  e->setMinimumSize(QSize(metrics.horizontalAdvance("MM"), metrics.lineSpacing()*3));
   e->setFont(font);
   c->setFont(font);
   // sizes
@@ -1286,7 +1286,7 @@ QLuaSdiMain::createStatusBar()
   d->sbLabel = new QLabel();
   d->sbLabel->setFont(font);
   d->sbLabel->setAlignment(Qt::AlignCenter);
-  d->sbLabel->setMinimumWidth(metric.width(" XXXX "));
+  d->sbLabel->setMinimumWidth(metric.horizontalAdvance(" XXXX "));
   statusbar->addPermanentWidget(d->sbLabel);
   return statusbar;
 }
@@ -1342,11 +1342,10 @@ QLuaSdiMain::doPrint()
   QPrinter *printer = loadPageSetup();
   if (! d->printDialog)
     d->printDialog = new QPrintDialog(printer, this);
-  QPrintDialog::PrintDialogOptions options = d->printDialog->enabledOptions();
-  options &= ~QPrintDialog::PrintSelection;
   if (d->c->textCursor().hasSelection())
-    options |= QPrintDialog::PrintSelection;
-  d->printDialog->setEnabledOptions(options);
+    d->printDialog->setOption(QAbstractPrintDialog::PrintSelection);
+  else
+    d->printDialog->setOption(QAbstractPrintDialog::PrintSelection, false);
   if (d->printDialog->exec() == QDialog::Accepted)
     {
       d->c->print(printer);
@@ -1516,7 +1515,7 @@ QLuaSdiMain::doEval()
     {
       QString s = cursor.selectedText().trimmed();
       s = s.replace(QChar(0x2029),QChar('\n'));
-      s = s.replace(QRegExp("^\\s*=\\s*"), "return ");
+      s = s.replace(QRegularExpression("^\\s*=\\s*"), "return ");
       if (QLuaIde::instance()->luaExecute(s.toLocal8Bit()))
         return;
     }

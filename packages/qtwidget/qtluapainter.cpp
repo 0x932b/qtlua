@@ -148,7 +148,7 @@ protected:
   bool eventFilter(QObject *watcher, QEvent *event);
   bool event(QEvent *e);
 public:
-  QMutex mutex;
+  QRecursiveMutex mutex;
   QtLuaPainter *q;
   QPainter *p;
   State state;
@@ -174,7 +174,7 @@ QtLuaPainter::Private::~Private()
 
 QtLuaPainter::Private::Private(QtLuaPainter *parent)
   : QObject(parent),
-    mutex(QMutex::Recursive),
+    mutex(),
     q(parent),
     p(0),
     device(0),
@@ -507,7 +507,7 @@ QtLuaPainter::image() const
   if (d->device == &d->pixmap)
     return d->pixmap.toImage();
   else if (d->device == (QWidget*)(d->widget))
-    return QPixmap::grabWindow(d->widget->winId()).toImage();
+    return d->widget->grab().toImage();
   else
     return d->image;
 }
@@ -519,7 +519,7 @@ QtLuaPainter::pixmap() const
   if (d->device == &d->image)
     return QPixmap::fromImage(d->image);
   else if (d->device == (QWidget*)(d->widget))
-    return QPixmap::grabWindow(d->widget->winId());
+    return d->widget->grab();
   else
     return d->pixmap;
 }
@@ -846,7 +846,7 @@ QtLuaPainter::initmatrix()
       QSizeF ps = printer->paperSize();   
       if (ps.isValid())
         {
-          QRect pr = printer->pageRect();
+          QRect pr = printer->pageRect().toRect();
           qreal sx = ps.width() / pr.width();
           qreal sy = ps.height() / pr.height();
           if (sx > 0 || sy > 0)
@@ -1105,7 +1105,7 @@ void
 QtLuaPainter::charpath(QString text)
 {
   QFontMetricsF metrics(d->state.font);
-  double width = metrics.width(text);
+  double width = metrics.horizontalAdvance(text);
   d->state.path.addText(d->state.point, d->state.font, text);
   d->state.point.rx() += width;
   d->state.hasPoint = false;
@@ -1195,7 +1195,7 @@ QtLuaPainter::show(QString text)
 {
   Locker lock(this);
   QFontMetricsF metrics(d->state.font);
-  double width = metrics.width(text);
+  double width = metrics.horizontalAdvance(text);
   QRectF brect = metrics.boundingRect(text).translated(d->state.point);
   d->p->drawText(d->state.point, text);
   d->state.point.rx() += width;
@@ -1267,7 +1267,7 @@ qreal
 QtLuaPainter::stringwidth(QString text, qreal *pdx, qreal *pdy)
 {
   QFontMetricsF metrics(d->state.font);
-  qreal width = metrics.width(text);
+  qreal width = metrics.horizontalAdvance(text);
   qreal height = 0; // qt limitation?
   if (pdx) 
     *pdx = width;

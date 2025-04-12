@@ -22,6 +22,7 @@
 #include <QPen>
 #include <QPoint>
 #include <QPrinter>
+#include <QRecursiveMutex>
 #include <QRegion>
 #include <QTransform>
 #include <QVariant>
@@ -123,8 +124,7 @@ public:
   enum RenderHint {
     Antialiasing = QPainter::Antialiasing,
     TextAntialiasing = QPainter::TextAntialiasing,
-    SmoothPixmapTransform = QPainter::SmoothPixmapTransform,
-    HighQualityAntialiasing = QPainter::HighQualityAntialiasing,
+    SmoothPixmapTransform = QPainter::SmoothPixmapTransform
   };
   enum TextFlag {
     AlignLeft = Qt::AlignLeft,

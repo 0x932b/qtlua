@@ -18,7 +18,7 @@ static QMetaEnum
 f_enumerator(const char *s)
 {
   struct QFakeObject : public QObject {
-    static const QMetaObject* qt() { return &staticQtMetaObject; }
+    static const QMetaObject* qt() { return &staticMetaObject; }
   };
   const QMetaObject *mo = QFakeObject::qt();
   int index = (mo) ? mo->indexOfEnumerator(s) : -1;
@@ -79,13 +79,13 @@ QtLuaListener::eventFilter(QObject *object, QEvent *event)
         QByteArray m = em.valueToKeys(e->modifiers());
         QByteArray s = eb.valueToKeys(e->buttons());
         if (event->type() == QEvent::MouseButtonPress)
-          emit sigMousePress(e->x(), e->y(), b, m, s);
+          emit sigMousePress(e->position().x(), e->position().y(), b, m, s);
         else if (event->type() == QEvent::MouseButtonRelease)
-          emit sigMouseRelease(e->x(), e->y(), b, m, s);
+          emit sigMouseRelease(e->position().x(), e->position().y(), b, m, s);
         else if (event->type() == QEvent::MouseButtonDblClick)
-          emit sigMouseDoubleClick(e->x(), e->y(), b, m, s);
+          emit sigMouseDoubleClick(e->position().x(), e->position().y(), b, m, s);
         else
-          emit sigMouseMove(e->x(), e->y(), m, s);
+          emit sigMouseMove(e->position().x(), e->position().y(), m, s);
         break;
       }
     case QEvent::Enter:
