@@ -4,7 +4,7 @@
 #include <QApplication>
 #include <QDebug>
 #include <QDir>
-#include <QDesktopWidget>
+#include <QScreen>
 #include <QEventLoop>
 #include <QFileInfo>
 #include <QKeyEvent>
@@ -13,7 +13,7 @@
 #include <QModelIndex>
 #include <QMouseEvent>
 #include <QPalette>
-#include <QRegExp>
+#include <QRegularExpression>
 #include <QScrollBar>
 #include <QVariant>
 
@@ -589,7 +589,7 @@ QLuaMode::setBalance(int fpos, int tpos, bool outer)
   bal.pos = fpos;
   bal.len = tpos - fpos;
   bal.outer = outer;
-  d->balances.insertMulti(tpos, bal);
+  d->balances.insert(tpos, bal);
 }
 
 
@@ -761,7 +761,7 @@ QLuaMode::CompView::exec(QPoint pos)
     setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
   // position list
   pos = widget->mapToGlobal(pos);
-  QRect screen = QApplication::desktop()->availableGeometry(widget);
+  QRect screen = widget->screen()->availableGeometry();
   if (pos.x() + rw > screen.x() + screen.width()) 
     pos.setX(screen.x() + screen.width() - rw);
   if (pos.x() < screen.x())
@@ -827,7 +827,7 @@ QLuaMode::CompView::event(QEvent *event)
         switch(ke->key())
           {
           default:
-            QCoreApplication::postEvent(e, new QKeyEvent(*ke));
+            QCoreApplication::postEvent(e, new QKeyEvent(ke->type(), ke->key(), ke->modifiers(), ke->nativeScanCode(), ke->nativeVirtualKey(), ke->nativeModifiers(), ke->text(), ke->isAutoRepeat(), ke->count()));
           case Qt::Key_Escape:
             emit activated(QModelIndex());
             event->accept();
@@ -846,7 +846,7 @@ QLuaMode::CompView::event(QEvent *event)
       }
     case QEvent::MouseButtonPress:
       {
-        QPoint pos = static_cast<QMouseEvent*>(event)->globalPos();
+        QPoint pos = static_cast<QMouseEvent*>(event)->globalPosition().toPoint();
         if (! rect().contains(mapFromGlobal(pos))) 
           {
             event->accept();

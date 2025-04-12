@@ -11,6 +11,7 @@
 #include <QSettings>
 #include <QSharedData>
 #include <QSharedDataPointer>
+#include <algorithm>
 
 
 #include "qluaapplication.h"
@@ -272,7 +273,7 @@ QLuaModeC::gotLine(UserData *d, int pos, int len, QString s)
   int slen = s.size();
   while (p < len)
     {
-      int c = (p < slen) ? s[p].toAscii() : '\n';
+      int c = (p < slen) ? s[p].toLatin1() : '\n';
       switch(state)
         {
         case LexStart:
