@@ -1,1 +1,10 @@
 build/
+*.dylib
+macqlua
+qlua/qlua
+qtcore/
+qtgui/
+qtide/
+qtsvg/
+qtuiloader/
+qtwidget/
