@@ -14,7 +14,7 @@
 #include <QPainter>
 #include <QSvgGenerator>
 #include <QSvgRenderer>
-#include <QSvgWidget>
+#include <QtSvgWidgets/QSvgWidget>
 #include <QVariant>
 
 #include "qtsvg.h"
@@ -32,7 +32,7 @@ static int
 qtluasvggenerator_new(lua_State *L)
 {
   QVariant v = luaQ_toqvariant(L, 1, QMetaType::QString);
-  if (v.type() == QVariant::String)
+  if (v.metaType().id() == QMetaType::QString)
     {
       QObject *p = luaQ_optqobject<QObject>(L, 2);
       luaQ_pushqt(L, new QtLuaSvgGenerator(v.toString(), p), !p);
@@ -66,7 +66,7 @@ static int
 qsvgrenderer_new(lua_State *L)
 {
   QVariant v = luaQ_toqvariant(L, 1, QMetaType::QString);
-  if (v.type() == QVariant::String)
+  if (v.metaType().id() == QMetaType::QString)
     {
       QObject *p = luaQ_optqobject<QObject>(L, 2);
       luaQ_pushqt(L, new QSvgRenderer(v.toString(), p), !p);
@@ -102,7 +102,7 @@ static int
 qsvgwidget_new(lua_State *L)
 {
   QVariant v = luaQ_toqvariant(L, 1, QMetaType::QString);
-  if (v.type() == QVariant::String)
+  if (v.metaType().id() == QMetaType::QString)
     {
       QWidget *p = luaQ_optqobject<QWidget>(L, 2);
       luaQ_pushqt(L, new QSvgWidget(v.toString(), p), !p);

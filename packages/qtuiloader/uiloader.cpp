@@ -8,6 +8,7 @@ extern "C" {
 #include <QAction>
 #include <QActionGroup>
 #include <QApplication>
+#include <QGuiApplication>
 #include <QByteArray>
 #include <QDir>
 #include <QFile>
@@ -28,7 +29,7 @@ extern "C" {
 static int 
 qtuiloader_new(lua_State *L)
 {
-  if (QApplication::type() == QApplication::Tty)
+  if (QGuiApplication::platformName() == "offscreen")
     luaL_error(L, "Graphics have been disabled (running with -nographics)");
   QObject *parent = luaQ_optqobject<QObject>(L, 1, 0);
   QUiLoader *q = new QUiLoader(parent);
