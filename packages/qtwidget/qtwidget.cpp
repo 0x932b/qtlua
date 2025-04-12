@@ -173,8 +173,8 @@ luaQE_checkqvariant(lua_State *L, int index, T* = 0)
       lua_pop(L, 1);
     }
   if (v.userType() != type)
-    luaQ_typerror(L, index, QMetaType::typeName(type));
-  return qVariantValue<T>(v);
+    luaQ_typerror(L, index, QMetaType::fromType<void>().name());
+  return v.value<T>();
 }
 
 
@@ -754,7 +754,7 @@ luaopen_libqtwidget(lua_State *L)
   // load module 'qt'
   if (luaL_dostring(L, "require 'qt'"))
     lua_error(L);
-  if (QApplication::type() == QApplication::Tty)
+  if (QGuiApplication::platformName() == "offscreen")
     printf("qtwidget window functions will not be usable (running with -nographics)\n");
   //luaL_error(L, "Graphics have been disabled (running with -nographics)");
 

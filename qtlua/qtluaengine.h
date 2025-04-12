@@ -155,8 +155,8 @@ luaQ_checkqvariant(lua_State *L, int index, T* = 0)
   int type = qMetaTypeId<T>();
   QVariant v = luaQ_toqvariant(L, index, type);
   if (v.userType() != type)
-    luaQ_typerror(L, index, QMetaType::typeName(type));
-  return qVariantValue<T>(v);
+    luaQ_typerror(L, index, QMetaType(type).name());
+  return v.value<T>();
 }
 
 template<typename T> inline T*

@@ -2,6 +2,7 @@
 
 #define QTLUAENGINE 1
 
+#include <QtWidgets>  // For QWidget and other widget classes
 #include "qtluautils.h"
 #include "qtluaengine.h"
 extern "C" {
@@ -184,7 +185,7 @@ Q_GLOBAL_STATIC(QtLuaEngine::Global, qtLuaEngineGlobal);
 void 
 QtLuaEngine::Global::registerMetaObject(const QMetaObject *mo, bool super)
 {
-  QMutexLocker locker(&mutex);
+  QMutexLocker<QMutex> locker(&mutex);
   knownMetaObjects[mo->className()] = mo;
   while (super && (mo = mo->superClass()))
     knownMetaObjects[mo->className()] = mo;
@@ -194,7 +195,7 @@ QtLuaEngine::Global::registerMetaObject(const QMetaObject *mo, bool super)
 const QMetaObject *
 QtLuaEngine::Global::findMetaObject(QByteArray className)
 {
-  QMutexLocker locker(&mutex);
+  QMutexLocker<QMutex> locker(&mutex);
   if (knownMetaObjects.contains(className))
     return knownMetaObjects[className];
   return 0;
@@ -237,7 +238,7 @@ public:
   QThread *luaThread() const;
   bool isObjectLuaOwned(QObject *obj);
   void makeObjectLuaOwned(QObject *obj);
-  bool processQueuedSignals(QMutexLocker &locker);
+  bool processQueuedSignals(QMutexLocker<QMutex> &locker);
   void disconnectAllSignals();
   bool stopHelper(bool unwind);
   bool resumeHelper(int retcode);
@@ -408,7 +409,7 @@ QtLuaEngine::Private::makeObjectLuaOwned(QObject *obj)
 
 
 static void
-queue_sub(QtLuaEngine::Private *d, QMutexLocker &locker)
+queue_sub(QtLuaEngine::Private *d, QMutexLocker<QMutex> &locker)
 {
   QThread *mythread = QThread::currentThread();
   Q_ASSERT(mythread == d->thread());
@@ -713,7 +714,7 @@ QtLuaEngine::~QtLuaEngine()
   disconnect(d, 0, this, 0);
   d->disconnectAllSignals();
   // stop lua
-  QMutexLocker locker(&d->mutex);
+  QMutexLocker<QMutex> locker(&d->mutex);
   while (d->lockCount || d->lockThread || d->hopEvent)
     {
       locker.unlock();
@@ -944,7 +945,7 @@ QtLuaEngine::runSignalHandlers() const
 
 
 static bool
-lua_pause_sub(lua_State *L, QtLuaEngine::Private *d, QMutexLocker &locker)
+lua_pause_sub(lua_State *L, QtLuaEngine::Private *d, QMutexLocker<QMutex> &locker)
 {
   // must be called with a message on the stack
   if (!d->pauseLoop && d->rflag && !d->unwindStack)
@@ -1548,8 +1549,8 @@ qvariant_has_object_type(const QVariant *vp)
 {
   int type = vp->userType();
   return (type == qMetaTypeId<QObjectPointer>() ||
-          type == QMetaType::QObjectStar ||
-          type == QMetaType::QWidgetStar );
+          type == QMetaType::fromType<QObject*>().id() ||
+          type == QMetaType::fromType<QWidget*>().id());
 }
 
 
@@ -1619,11 +1620,11 @@ luaQ_toqvariant(lua_State *L, int index, int type)
       int vtype = v.userType();
       if (type == vtype)
         return v;
-      else if (type == QVariant::ByteArray && vtype == QVariant::String)
+      else if (type == QMetaType::QByteArray && vtype == QMetaType::QString)
         v = v.toString().toLocal8Bit();
-      else if (type == QVariant::String && vtype == QVariant::ByteArray)
+      else if (type == QMetaType::QString && vtype == QMetaType::QByteArray)
         v = QString::fromLocal8Bit(v.toByteArray().constData());
-      else if (! v.convert(QVariant::Type(type)))
+      else if (! v.convert(QMetaType(type)))
         v = QVariant();
     }
   return v;
@@ -1669,7 +1670,7 @@ QtLuaEngine::Protector::maybeProtect(const QVariant &var)
 bool 
 QtLuaEngine::Protector::protect(const QVariant &var)
 {
-  QMutexLocker lock(&mutex);
+  QMutexLocker<QMutex> lock(&mutex);
   int size = saved.size();
   saved.append(var);
   if (! size)
@@ -1682,8 +1683,8 @@ QtLuaEngine::Protector::event(QEvent *e)
 {
   if (e->type() == QEvent::User)
     {
-      QMutexLocker lock(&mutex);
-      saved.clear(); // possible actual deletion 
+      QMutexLocker<QMutex> lock(&mutex);
+      saved.clear(); // possible actual deletion
       return true;
     }
   return QObject::event(e);
@@ -1742,7 +1743,7 @@ luaQ_m__isa(lua_State *L)
   if (! vp)
     b = (!strcmp(t, lua_typename(L, lua_type(L, 1))));
   else if (! qvariant_has_object_type(vp))
-    b = (!strcmp(t, QMetaType::typeName(vp->userType())) ||
+    b = (!strcmp(t, QMetaType(vp->userType()).name()) ||
          !strcmp(t, vp->typeName()) );
   else if ((obj = luaQ_toqobject(L, 1)))
     {
@@ -1802,12 +1803,12 @@ luaQ_m__tostring(lua_State *L)
       int type = vp->userType();
       const void *ptr = vp->constData();
       QVariant var = *vp;
-      if (var.type() == QVariant::String)
+      if (var.typeId() == QMetaType::QString)
         lua_pushstring(L, var.toString().toLocal8Bit().constData());
-      else if (var.convert(QVariant::ByteArray))
+      else if (var.canConvert<QByteArray>() && var.convert(QMetaType::fromType<QByteArray>()))
         lua_pushstring(L, var.toByteArray().constData());
       else
-        lua_pushfstring(L, "qt.%s (%p)", QMetaType::typeName(type), ptr);
+        lua_pushfstring(L, "qt.%s (%p)", QMetaType(type).name(), ptr);
     }
   return 1;
 }
@@ -1820,7 +1821,7 @@ luaQ_m__tonumber(lua_State *L)
   // Converts a qt value to a number.
   // Returns nil if the conversion is impossible
   QVariant var = luaQ_toqvariant(L, 1);
-  if (var.convert(QVariant::Double))
+  if (var.convert(QMetaType::fromType<double>()))
     lua_pushnumber(L, var.toDouble());
   else
     lua_pushnil(L);
@@ -1872,19 +1873,19 @@ luaQ_m__getsetproperty(lua_State *L)
   QObject *obj = luaQ_toqobject(L, 1, info->metaObject);
   if (! obj)
     luaQ_typerror(L, 0, info->metaObject->className());
-  if (! mp.isScriptable(obj))
-    luaL_error(L, "property " LUA_QS " is not scriptable", mp.name());
+  if (! mp.isScriptable())
+    luaL_error(L, "property '%s' is not scriptable", mp.name());
   if (lua_gettop(L) == 1)
     {
       if (! mp.isReadable())
-        luaL_error(L, "property " LUA_QS " is not readable", mp.name());
+        luaL_error(L, "property '%s' is not readable", mp.name());
       // get property
       QVariant v = mp.read(obj);
       // convert enum codes into enum names
       QByteArray n;
-      if (mp.isFlagType() && v.canConvert(QVariant::Int))
+      if (mp.isFlagType() && v.canConvert<int>())
         v = mp.enumerator().valueToKeys(v.toInt());
-      else if (mp.isEnumType() && v.canConvert(QVariant::Int))
+      else if (mp.isEnumType() && v.canConvert<int>())
         v = mp.enumerator().valueToKey(v.toInt());
       // return
       luaQ_pushqt(L, v);
@@ -1894,25 +1895,25 @@ luaQ_m__getsetproperty(lua_State *L)
     {
       QVariant v = luaQ_toqvariant(L, 2);
       if (! mp.isWritable())
-        luaL_error(L, "property " LUA_QS " is not writable", mp.name());
+        luaL_error(L, "property '%s' is not writable", mp.name());
       // string conversion
-      if (mp.type() == QVariant::String && v.type() == QVariant::ByteArray)
+      if (mp.metaType().id() == QMetaType::QString && v.typeId() == QMetaType::QByteArray)
         v = QString::fromLocal8Bit(v.toByteArray());
       // enum and flags conversion
-      if (mp.isFlagType() && v.type() == QVariant::ByteArray)
+      if (mp.isFlagType() && v.typeId() == QMetaType::QByteArray)
         {
           QMetaEnum me = mp.enumerator();
           int n = me.keysToValue(v.toByteArray().constData());
           if (n == -1)
-            luaL_error(L, "unrecognized flag for " LUA_QS, me.name());
+            luaL_error(L, "unrecognized flag for '%s'", me.name());
           v = QVariant(n);
         }
-      else if (mp.isEnumType() && v.type() == QVariant::ByteArray)
+      else if (mp.isEnumType() && v.typeId() == QMetaType::QByteArray)
         {
           QMetaEnum me = mp.enumerator();
           int n = me.keyToValue(v.toByteArray().constData());
           if (n == -1)
-            luaL_error(L, "unrecognized enum for " LUA_QS, me.name());
+            luaL_error(L, "unrecognized enum for '%s'", me.name());
           v = QVariant(n);
         }
       // check types
@@ -1928,7 +1929,7 @@ luaQ_m__getsetproperty(lua_State *L)
 static void *
 make_argtype(QByteArray type)
 {
-  int tid = QMetaType::type(type);
+  int tid = QMetaType::fromType<void>().id();
   if (type.endsWith("*"))
     {
       type.chop(1);
@@ -1963,7 +1964,7 @@ v_to_name(void *v)
 {
   int type = v_to_type(v);
   if (type)
-    return QMetaType::typeName(type);
+    return QMetaType(type).name();
   else if (v)
     return v_to_metaobject(v)->className();
   else
@@ -1977,12 +1978,12 @@ construct_arg(QVariant &var, void *vtype)
   int type = v_to_type(vtype);
   const QMetaObject *mo = v_to_metaobject(vtype);
   QObject *obj;
-  if (type == QVariant::String && var.type() == QVariant::ByteArray)
+  if (type == QMetaType::QString && var.typeId() == QMetaType::QByteArray)
     var = QString::fromLocal8Bit(var.toByteArray());
   if (type == qMetaTypeId<QVariant>())
     return static_cast<void*>(new QVariant(var));
-  else if (type && (var.userType() == type || var.convert(QVariant::Type(type))))
-    return QMetaType::construct(type, var.constData());
+  else if (type && (var.userType() == type || var.convert(QMetaType(type))))
+    return QMetaType(type).create(var.constData());
   else if (mo && (obj = qvariant_to_object(&var)))
     return static_cast<void*>(new QObject*(obj));
   return 0;
@@ -1999,7 +2000,7 @@ destroy_arg(void *arg,  void *vtype)
   else if (type == qMetaTypeId<QVariant>())
     delete static_cast<QVariant*>(arg);
   else if (type)
-    QMetaType::destroy(type, arg);
+    QMetaType(type).destroy(arg);
   else if (mo)
     delete static_cast<QObject**>(arg);
 }
@@ -2017,7 +2018,7 @@ construct_retval(void *vtype)
   else if (type == qMetaTypeId<QVariant>())
     return static_cast<void*>(new QVariant());
   else if (type)
-    return QMetaType::construct(type);
+    return QMetaType(type).create();
   return 0;
 }
 
@@ -2032,7 +2033,7 @@ luaQ_p_push_retval(lua_State *L, void *arg, void *vtype)
   if (type == qMetaTypeId<QVariant>())
     luaQ_pushqt(L, *static_cast<QVariant*>(arg));
   else if (type)
-    luaQ_pushqt(L, QVariant(type, arg));
+    luaQ_pushqt(L, QVariant(QMetaType(type), arg));
   else if (mo)
     luaQ_pushqt(L, *static_cast<QObject**>(arg));
   else
@@ -2111,7 +2112,7 @@ select_overload(VarVector &vars, const QtLuaMethodInfo *info)
               continue;
             s += 10;
             QVariant var = vars[j];
-            if (var.canConvert(QVariant::Type(type)))
+            if (var.canConvert(QMetaType(type)))
               continue;
             s += INT_MAX / 2;
             break;
@@ -2248,7 +2249,7 @@ luaQ_m__index(lua_State *L)
         luaQ_pushqt(L, o);
         return 1;
       }
-  QObject *o = qFindChild<QObject*>(obj, QString::fromLocal8Bit(key));
+  QObject *o = obj->findChild<QObject*>(QString::fromLocal8Bit(key));
   if (o)
     {
       luaQ_pushqt(L, o);
@@ -2339,7 +2340,7 @@ luaQ_buildmetaclass(lua_State *L, int type)
   lua_pushlightuserdata(L, (void*)qtKey);
   lua_rawget(L, LUA_REGISTRYINDEX); 
   Q_ASSERT(lua_istable(L, -1));
-  lua_pushstring(L, QMetaType::typeName(type));
+  lua_pushstring(L, QMetaType(type).name());
   lua_pushvalue(L, -3);
   // ..stack: metaclass qtkeytable typename metaclass
   lua_rawset(L, -3);
@@ -2394,7 +2395,7 @@ luaQ_buildmetaclass(lua_State *L, const QMetaObject *mo)
   for  (int i=fm; i<lm; i++)
     {
       QMetaMethod method = mo->method(i);
-      QByteArray sig = method.signature();
+      QByteArray sig = method.methodSignature();
       if (method.access() != QMetaMethod::Private)
         {
           QtLuaMethodInfo::Detail d;
@@ -2405,7 +2406,7 @@ luaQ_buildmetaclass(lua_State *L, const QMetaObject *mo)
           info.d += d;
           info.d.squeeze();
           lua_pushstring(L, sig.constData());
-          luaQ_pushqt(L, qVariantFromValue(info));
+          luaQ_pushqt(L, QVariant::fromValue(info));
           // stack: class signature methodinfo
           lua_rawset(L, -3);
           // record overloads
@@ -2429,7 +2430,7 @@ luaQ_buildmetaclass(lua_State *L, const QMetaObject *mo)
       QtLuaMethodInfo info = it.value();
       info.d.squeeze();
       lua_pushstring(L, it.key().constData());
-      luaQ_pushqt(L, qVariantFromValue(info));
+      luaQ_pushqt(L, QVariant::fromValue(info));
       lua_rawset(L, -3);
     }
   // Properties
@@ -2442,7 +2443,7 @@ luaQ_buildmetaclass(lua_State *L, const QMetaObject *mo)
       info.metaObject = mo;
       info.metaProperty = mo->property(j);
       lua_pushstring(L, info.metaProperty.name());
-      luaQ_pushqt(L, qVariantFromValue(info));
+      luaQ_pushqt(L, QVariant::fromValue(info));
       // stack: class name propinfo
       lua_rawset(L, -3);
     }
@@ -2489,7 +2490,7 @@ luaQ_fillmetatable(lua_State *L, int type, const QMetaObject *mo)
       lua_pushvalue(L, -1);
       lua_setfield(L, -3, "__index");
       lua_setfield(L, -2, "__metatable");
-      lua_pushstring(L, QMetaType::typeName(type));
+      lua_pushstring(L, QMetaType(type).name());
       lua_setfield(L, -2, "__typename");
     }
 }
@@ -2582,16 +2583,16 @@ luaQ_pushqt(lua_State *L, const QVariant &var)
 {
   switch(var.userType())
     {
-    case QVariant::Invalid:
+    case QMetaType::UnknownType:
       lua_pushnil(L);
       break;
-    case QVariant::Bool:
+    case QMetaType::Bool:
       lua_pushboolean(L, var.toBool());
       break;
-    case QVariant::Double:
-    case QVariant::Int:
-    case QVariant::ULongLong:
-    case QVariant::UInt:
+    case QMetaType::Double:
+    case QMetaType::Int:
+    case QMetaType::ULongLong:
+    case QMetaType::UInt:
     case QMetaType::Float:
     case QMetaType::Char:
     case QMetaType::Short:
@@ -2601,7 +2602,7 @@ luaQ_pushqt(lua_State *L, const QVariant &var)
     case QMetaType::ULong:
       lua_pushnumber(L, var.toDouble());
       break;
-    case QVariant::ByteArray:
+    case QMetaType::QByteArray:
       {
         QByteArray b = var.toByteArray();
         lua_pushlstring(L, b.constData(), b.size());
@@ -2655,7 +2656,7 @@ luaQ_pushqt(lua_State *L, QObject *obj, bool owned)
           // ..stack: objecttable
           // Make new userdata for object
           QObjectPointer objp = obj;
-          QVariant objv = qVariantFromValue(objp);
+          QVariant objv = QVariant::fromValue(objp);
           void *v = lua_newuserdata(L, sizeof(QVariant));
           new (v) QVariant(objv);
           // Fill object
@@ -2735,7 +2736,7 @@ QtLuaEngine::Receiver::~Receiver()
     {
       QtLuaQueuedSignal q;
       q.delsignal = (void*)this;
-      QMutexLocker locker(&d->mutex);
+      QMutexLocker<QMutex> locker(&d->mutex);
       d->queuedSignals += q;
     }
 }
@@ -2809,8 +2810,8 @@ QtLuaEngine::Receiver::universal()
 {
   bool queueSignal = false;
   QThread *mythread = QThread::currentThread();
-  QMutexLocker locker(&d->mutex);
-  if (d && direct && !d->hopEvent && 
+  QMutexLocker<QMutex> locker(&d->mutex);
+  if (d && direct && !d->hopEvent &&
       d->lockCount>0 && d->lockThread == mythread)
     {
       // find closure
@@ -2853,10 +2854,10 @@ QtLuaEngine::Receiver::universal()
           if (type == qMetaTypeId<QVariant>())
             q.args += *static_cast<QVariant*>(args[i]);
           else if (type)
-            q.args += QVariant(type, args[i]);
+            q.args += QVariant(QMetaType(type), args[i]);
           else if (mo) {
             QObjectPointer p = *static_cast<QObject**>(args[i]);
-            q.args += qVariantFromValue(p);
+            q.args += QVariant::fromValue(p);
           } else
             q.args += QVariant();
         }
@@ -2878,13 +2879,13 @@ QtLuaEngine::Private::disconnectAllSignals()
   foreach(QObject *obj, children())
     if ((obj) && (r = qobject_cast<Receiver*>(obj)))
       r->disconnect();
-  QMutexLocker locker(&mutex);
+  QMutexLocker<QMutex> locker(&mutex);
   queuedSignals.clear();
 }
 
 
 bool 
-QtLuaEngine::Private::processQueuedSignals(QMutexLocker &locker)
+QtLuaEngine::Private::processQueuedSignals(QMutexLocker<QMutex> &locker)
 {
   bool processed = false;
   QList<QtLuaQueuedSignal> qs = queuedSignals;
@@ -2952,7 +2953,7 @@ void
 luaQ_doevents(lua_State *L, bool wait)
 {
   QtLuaEngine::Private *d = luaQ_private(L);
-  QMutexLocker locker(&d->mutex);
+  QMutexLocker<QMutex> locker(&d->mutex);
   QEventLoop *saved_loop = d->pauseLoop;
   bool saved_rflag = d->rflag;
   // process events (state unchanged. should we pause on wait?)
@@ -2997,7 +2998,7 @@ luaQ_pause(lua_State *L)
   QtLuaEngine::Private *d = luaQ_private(L);
   d->emitQueueSignal();
   lua_pushliteral(L, "pause");
-  QMutexLocker locker(&d->mutex);
+  QMutexLocker<QMutex> locker(&d->mutex);
   bool stateChanged = lua_pause_sub(L, d, locker);
   locker.unlock();
   if (stateChanged)
@@ -3014,7 +3015,7 @@ void
 luaQ_resume(lua_State *L, bool nocontinue)
 {
   QtLuaEngine::Private *d = luaQ_private(L);
-  QMutexLocker locker(&d->mutex);
+  QMutexLocker<QMutex> locker(&d->mutex);
   if (d->pauseLoop)
     return;
   if (nocontinue)
@@ -3032,7 +3033,7 @@ luaQ_p_create_receiver(lua_State *L)
 {
   QtLuaEngine::Private *d = luaQ_private(L);
   QtLuaEngine::Receiver *r = new QtLuaEngine::Receiver2(d->q);
-  luaQ_pushqt(L, qVariantFromValue<void*>(static_cast<void*>(r)));
+  luaQ_pushqt(L, QVariant::fromValue<void*>(static_cast<void*>(r)));
   return 1;
 }
 
@@ -3053,7 +3054,7 @@ luaQ_connect(lua_State *L, QObject *obj,
   lua_pushcfunction(L, luaQ_p_create_receiver);
   luaQ_call(L, 0, 1, d->q);
   QVariant *vp = luaQ_toqvariantp(L, -1);
-  void *v = (vp) ? qVariantValue<void*>(luaQ_toqvariant(L, -1)) : 0;
+  void *v = (vp) ? luaQ_toqvariant(L, -1).value<void*>() : 0;
   QtLuaEngine::Receiver *r = static_cast<QtLuaEngine::Receiver*>(v);
   lua_pop(L, 1);
   if (! r)
@@ -3103,7 +3104,7 @@ luaQ_disconnect(lua_State *L, QObject *obj, const char *sig, int findex)
   // ..stack: function sigtable ...
   // select receviers
   QList<QtLuaEngine::Receiver*> chosen;
-  QMutexLocker locker(&d->mutex);
+  QMutexLocker<QMutex> locker(&d->mutex);
   QtLuaEngine::Receiver *r;
   foreach(QObject *o, d->q->children())
     if ((r = qobject_cast<QtLuaEngine::Receiver*>(o)))
