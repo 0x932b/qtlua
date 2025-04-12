@@ -9,6 +9,7 @@
 #include <stdarg.h>
 #include <exception>
 #include <ctype.h>
+#include <algorithm>
 
 #if HAVE_ERRNO_H
 # include <errno.h>
@@ -520,7 +521,7 @@ rtty_complete(const char *text, int start, int end)
           lua_pop(L, 1);
         }
     }
-  qSort(completions.begin(), completions.end());
+  std::sort(completions.begin(), completions.end());
   if (completions.isEmpty())
     return 0;
   rtty_completions = &completions;
@@ -537,12 +538,12 @@ rtty_prep()
 {
   // readline
   static QByteArray progname;
-  QFileInfo fileinfo = QCoreApplication::applicationFilePath();
+  QFileInfo fileinfo(QCoreApplication::applicationFilePath());
   progname = fileinfo.baseName().toLocal8Bit();
   rl_readline_name = progname.data();
   rl_getc_function = rtty_getchar;
   rl_attempted_completion_function = rtty_complete;
-  rl_completer_quote_characters = "\"'";
+  rl_completer_quote_characters = const_cast<char*>("\"'");
 #if RL_READLINE_VERSION < 0x0600
   rl_completion_append_character = '\0';
 #endif
@@ -664,7 +665,7 @@ message_handler(QtMsgType type, const char *msg)
   FILE *ferr = stderr;
   if (console)
     ferr = console->trueStderr;
-  switch (type) 
+  switch (type)
     {
     case QtDebugMsg:
       fprintf(ferr, "# Debug: %s\n", msg);
@@ -678,6 +679,9 @@ message_handler(QtMsgType type, const char *msg)
     case QtFatalMsg:
       fprintf(ferr, "# Fatal: %s\n", msg);
       abort();
+    case QtInfoMsg:
+      fprintf(ferr, "# Info: %s\n", msg);
+      break;
     }
 }
 
@@ -1048,7 +1052,9 @@ QLuaConsole::Private::readline()
 QLuaConsole::QLuaConsole(QObject *parent)
   : QObject(parent), d(new Private(this))
 {
-  qInstallMsgHandler(message_handler);
+  qInstallMessageHandler([](QtMsgType type, const QMessageLogContext &context, const QString &msg) {
+    message_handler(type, msg.toLocal8Bit().constData());
+  });
   d->start();
 }
 

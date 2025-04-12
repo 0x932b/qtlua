@@ -13,6 +13,7 @@
 #include "qtluautils.h"
 
 #include <QApplication>
+#include <QGuiApplication>
 #include <QMessageBox>
 #include <QPrinter>
 
@@ -70,7 +71,7 @@ luaopen_libqtide(lua_State *L)
   // load module 'qt'
   if (luaL_dostring(L, "require 'qt'"))
     lua_error(L);
-  if (QApplication::type() == QApplication::Tty)
+  if (!QCoreApplication::instance()->inherits("QGuiApplication"))
     luaL_error(L, "Graphics have been disabled (running with -nographics)");
   // register metatypes
   qRegisterMetaType<QPrinter*>("QPrinter*");

@@ -5,12 +5,12 @@
 
 #include "qtide.h"
 
-
 #include <QDialog>
 #include <QFile>
 #include <QList>
 #include <QObject>
 #include <QPlainTextEdit>
+#include <QPrinter>
 #include <QSize>
 #include <QString>
 #include <QSyntaxHighlighter>
@@ -20,6 +20,7 @@
 #include <QTextDocument>
 #include <QTextEdit>
 #include <QVariant>
+#include <QWidget>
 #include <QWidget>
 
 class QLuaEditor;

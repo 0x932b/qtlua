@@ -720,10 +720,10 @@ static int qtlualistener_hook(lua_State *L)
 static int qtluaprinter_new(lua_State *L)
 {
   static const char *modes[] = {"ScreenResolution","HighResolution",0};
-  QPrinter::PrinterMode mode = QPrinter::ScreenResolution;
+  int resolution = 72;  // Default screen resolution
   if (luaL_checkoption(L, 1, "ScreenResolution", modes))
-    mode = QPrinter::HighResolution;
-  QtLuaPrinter *p = new QtLuaPrinter(mode);
+    resolution = 300;  // High resolution
+  QtLuaPrinter *p = new QtLuaPrinter(resolution);
   luaQ_pushqt(L, p, true);
   return 1;
 }

@@ -5,7 +5,6 @@
 
 #include "qtide.h"
 
-
 #include <QAction>
 #include <QActionGroup>
 #include <QFile>
@@ -14,6 +13,8 @@
 #include <QMainWindow>
 #include <QMessageBox>
 #include <QObject>
+#include <QWidget>
+#include <QPrinter>
 #include <QWidget>
 
 

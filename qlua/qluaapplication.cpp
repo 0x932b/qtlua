@@ -28,7 +28,7 @@
 #include <QMutex>
 #include <QMutexLocker>
 #include <QMap>
-#include <QRegExp>
+#include <QRegularExpression>
 #include <QSet>
 #include <QSettings>
 #include <QString>
@@ -368,7 +368,9 @@ QLuaApplication::Private::printMessage(int status, const char *fmt, ...)
   QString message;
   va_list ap;
   va_start(ap, fmt);
-  message = message.vsprintf(fmt, ap);
+  message = QString::vasprintf(fmt, ap);
+  if (message.isNull()) // vasprintf returns null on error
+    message = QString("Error formatting message");
   va_end(ap);
   fprintf(stderr, "%s\n", message.toLocal8Bit().constData());
   return status;
@@ -902,10 +904,11 @@ QLuaApplication::QLuaApplication(int &argc, char **argv,
   QString cuteName = QFileInfo(applicationFilePath()).baseName();
   d->programNameData = cuteName.toLocal8Bit();
   d->programName = d->programNameData.constData();
-  QRegExp re("^(mac(?=qlua)|win(?=qlua)|)(q?)(.*)", Qt::CaseInsensitive);
+  QRegularExpression re("^(mac(?=qlua)|win(?=qlua)|)(q?)(.*)", QRegularExpression::CaseInsensitiveOption);
   cuteName = capitalize(cuteName);
-  if (re.indexIn(cuteName) >= 0 && re.numCaptures() == 3)
-    cuteName = capitalize(re.cap(2)) + capitalize(re.cap(3));
+  QRegularExpressionMatch match = re.match(cuteName);
+  if (match.hasMatch())
+    cuteName = capitalize(match.captured(2)) + capitalize(match.captured(3));
 
   // basic setup
   setApplicationName(cuteName);
@@ -1088,7 +1091,7 @@ void
 QLuaApplication::writeSettings(QString key, QVariant value)
 {
   QSettings s;
-  if (value.type() == QVariant::Invalid)
+  if (!value.isValid())
     s.remove(key);
   else
     s.setValue(key,value);
@@ -1112,7 +1115,9 @@ QLuaApplication::filesToOpen()
 bool 
 QLuaApplication::runsWithoutGraphics() const
 {
-  return (QApplication::type() == QApplication::Tty);
+  // Qt6 removed QApplication::type() and Tty, use QCoreApplication instead
+  return !QGuiApplication::platformName().compare(QLatin1String("minimal"), Qt::CaseInsensitive) ||
+         !QGuiApplication::platformName().compare(QLatin1String("offscreen"), Qt::CaseInsensitive);
 }
 
 
