@@ -295,7 +295,7 @@ static int qobject_children(lua_State *L)
   QVariantList v;
   QObjectPointer p;
   foreach(p, w->children())
-    v << qVariantFromValue<QObjectPointer>(p);
+    v << QVariant::fromValue<QObjectPointer>(p);
   luaQ_pushqt(L, v);
   return 1;
 }

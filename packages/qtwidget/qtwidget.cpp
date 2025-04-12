@@ -10,6 +10,7 @@
 #include "lualib.h"
 
 #include <QAction>
+#include <QGuiApplication>
 #include <QApplication>
 #include <QBrush>
 #include <QColor>
@@ -50,7 +51,7 @@ static QMetaEnum
 f_enumerator(const char *s)
 {
   struct QFakeObject : public QObject {
-    static const QMetaObject* qt() { return &staticQtMetaObject; } };
+    static const QMetaObject* qt() { return &staticMetaObject; } };
   return f_enumerator(s, QFakeObject::qt());
 }
 #endif
@@ -132,7 +133,7 @@ f_checkvar(lua_State *L, int index, const char *name, int tid)
     lua_getfield(L,index,name); 
   QVariant v = luaQ_toqvariant(L, -1, tid);
   if (v.userType() != tid)
-    luaL_error(L, "qt.%s expected in field '%s'", QMetaType::typeName(tid));
+    luaL_error(L, "qt.%s expected in field '%s'", QMetaType::fromType<void>().name());
 }
 
 static bool

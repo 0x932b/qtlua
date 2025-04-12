@@ -2,6 +2,7 @@
 
 #include "qtluautils.h"
 #include "qtluaengine.h"
+#include "qtluacompat.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -229,7 +230,7 @@ luaQ_complete(struct lua_State *L)
                   break;
                 case LUA_TUSERDATA: {
                   QVariant v = luaQ_toqvariant(L, -1);
-                  const char *s = QMetaType::typeName(v.userType());
+                  const char *s = v.metaType().name();
                   if (s && !strcmp(s,"QtLuaMethodInfo"))
                     suffix = "(";
                   else if (s && !strcmp(s, "QtLuaPropertyInfo"))
@@ -490,7 +491,7 @@ qt_type(lua_State *L)
   QVariant v;
   if (lua_type(L, 1) == LUA_TUSERDATA)
     v = luaQ_toqvariant(L, 1);
-  if (v.type() != QVariant::Invalid)
+  if (v.typeId() != QMetaType::UnknownType)
     {
       lua_pushvalue(L, 1);
       lua_getfield(L, -1, "type");
@@ -512,7 +513,7 @@ qt_isa(lua_State *L)
   QVariant v;
   if (lua_type(L, 1) == LUA_TUSERDATA)
     v = luaQ_toqvariant(L, 1);
-  if (v.type() != QVariant::Invalid)
+  if (v.typeId() != QMetaType::UnknownType)
     {
       lua_pushvalue(L, 1);
       lua_getfield(L, -1, "isa");
